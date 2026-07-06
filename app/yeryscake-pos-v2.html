@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Yery'sCake · POS</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#F26AA0">
+<link rel="apple-touch-icon" href="./icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Yery'sCake">
 <style>
   :root{
     --bgpink:#FFEDF4; --rose:#F26AA0; --rose-dark:#D94F87; --rose-soft:#FFD9E8;
@@ -256,6 +262,14 @@
         <button class="btn purple" onclick="guardarCodigos()">Guardar códigos</button>
       </div>
       <p style="font-size:13px; color:var(--cocoa-soft); margin:4px 6px">El código de <b>supervisor</b> anula ventas. El código de <b>admin</b> abre esta zona.</p>
+
+      <h2>Respaldo de datos</h2>
+      <div class="form">
+        <button class="btn" onclick="exportarRespaldo()">⬇️ Descargar respaldo</button>
+        <button class="btn purple" onclick="$('respaldoInput').click()">⬆️ Restaurar respaldo</button>
+        <input type="file" id="respaldoInput" accept="application/json" style="display:none" onchange="importarRespaldo(event)">
+      </div>
+      <p style="font-size:13px; color:var(--cocoa-soft); margin:4px 6px">Descarga este archivo de vez en cuando (Google Drive, email, USB). Si se borra el navegador o cambian de iPad, "Restaurar respaldo" trae de vuelta ventas, inventario, precios y fotos.</p>
     </div>
   </section>
 
@@ -515,31 +529,97 @@ function migrar(){
   return true;
 }
 
+/* ── PERSISTENCIA (IndexedDB, con migración desde localStorage) ── */
+const DB_NAME = 'yeryscake-db', DB_STORE = 'kv';
+function idbOpen(){
+  return new Promise((res,rej)=>{
+    const rq = indexedDB.open(DB_NAME, 1);
+    rq.onupgradeneeded = ()=>{ if(!rq.result.objectStoreNames.contains(DB_STORE)) rq.result.createObjectStore(DB_STORE); };
+    rq.onsuccess = ()=>res(rq.result);
+    rq.onerror = ()=>rej(rq.error);
+  });
+}
+async function idbGet(key){
+  const db = await idbOpen();
+  return new Promise((res,rej)=>{
+    const tx = db.transaction(DB_STORE,'readonly');
+    const rq = tx.objectStore(DB_STORE).get(key);
+    rq.onsuccess = ()=>res(rq.result);
+    rq.onerror = ()=>rej(rq.error);
+  });
+}
+async function idbSet(key,val){
+  const db = await idbOpen();
+  return new Promise((res,rej)=>{
+    const tx = db.transaction(DB_STORE,'readwrite');
+    tx.objectStore(DB_STORE).put(val,key);
+    tx.oncomplete = ()=>res();
+    tx.onerror = ()=>rej(tx.error);
+  });
+}
 async function load(){
   try{
-    const r = localStorage.getItem(KEY);
+    const r = await idbGet(KEY);
     if(r==null) throw new Error('sin datos guardados');
-    S = JSON.parse(r);
+    S = r;
   }catch(e){
-    S = seed();
-    await save();
+    try{
+      const old = localStorage.getItem(KEY);
+      if(old==null) throw new Error('sin datos previos');
+      S = JSON.parse(old);
+      await save();
+    }catch(e2){
+      S = seed();
+      await save();
+    }
   }
   try{
-    const ri = localStorage.getItem(KEY+'-imgs');
-    IMGS = ri==null ? {} : JSON.parse(ri);
-  }catch(e){ IMGS = {}; }
+    const ri = await idbGet(KEY+'-imgs');
+    if(ri==null) throw new Error('sin fotos guardadas');
+    IMGS = ri;
+  }catch(e){
+    try{
+      const oldImgs = localStorage.getItem(KEY+'-imgs');
+      IMGS = oldImgs==null ? {} : JSON.parse(oldImgs);
+      if(Object.keys(IMGS).length) await saveImgs();
+    }catch(e2){ IMGS = {}; }
+  }
   if(!S.codes) S.codes = {sup:'1234', adm:'2580'};
   if(migrar()) await save();
   $('vFecha').value = hoyISO();
   render();
 }
 async function saveImgs(){
-  try{ localStorage.setItem(KEY+'-imgs', JSON.stringify(IMGS)); }
+  try{ await idbSet(KEY+'-imgs', IMGS); }
   catch(e){ toast('⚠️ No se pudo guardar la foto (¿espacio lleno?)'); }
 }
 async function save(){
-  try{ localStorage.setItem(KEY, JSON.stringify(S)); }
+  try{ await idbSet(KEY, S); }
   catch(e){ toast('⚠️ No se pudo guardar'); }
+}
+function exportarRespaldo(){
+  const data = {app:'yeryscake-pos', version:1, exportedAt:new Date().toISOString(), S, IMGS};
+  const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `yeryscake-respaldo-${hoyISO()}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  toast('Respaldo descargado');
+}
+async function importarRespaldo(ev){
+  const file = ev.target.files[0];
+  if(!file) return;
+  if(!confirm('Esto reemplaza TODAS las ventas, precios e inventario actuales por los del respaldo. ¿Continuar?')){ ev.target.value=''; return; }
+  try{
+    const data = JSON.parse(await file.text());
+    if(!data || !data.S || !Array.isArray(data.S.items)) throw new Error('formato inválido');
+    S = data.S; IMGS = data.IMGS || {};
+    await save(); await saveImgs();
+    render();
+    toast('Respaldo restaurado');
+  }catch(e){ toast('⚠️ Archivo de respaldo inválido'); }
+  ev.target.value = '';
 }
 function toast(t){
   const m=$('msg'); m.textContent=t; m.classList.add('show');
@@ -954,6 +1034,9 @@ function verCierre(){
 }
 
 load();
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('./sw.js').catch(()=>{}); });
+}
 </script>
 </body>
 </html>
