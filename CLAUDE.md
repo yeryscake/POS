@@ -14,25 +14,29 @@ Moneda: USD.
 ## Archivo principal
 
 `app/yeryscake-pos-v2.html` — App completa en un solo archivo (HTML + CSS + JS vanilla,
-~630 KB porque lleva 87 fotos de productos embebidas en base64).
-`assets/productos/` — Las mismas 87 fotos como JPG individuales (150×150).
+~730 KB porque lleva 109 fotos de productos embebidas en base64).
+`assets/productos/` — Las mismas 109 fotos como JPG individuales (150×150).
+`app/manifest.webmanifest` + `app/sw.js` + `app/icons/` — PWA instalable y offline.
+`netlify.toml` — publica la carpeta `app/` en Netlify sin configuración manual.
 
-## ⚠️ Primera tarea técnica al retomar
+## ✅ Persistencia (ya resuelto)
 
-La app usa `window.storage` (API exclusiva de artifacts de Claude.ai). **Fuera de
-Claude.ai no funciona.** Para desarrollo local, reemplazar por una capa de
-persistencia propia:
-- Corto plazo: adaptar a `localStorage` para probar en navegador.
-- Producto real: SQLite / IndexedDB con arquitectura offline-first (el internet en
-  Bonaire falla; la app NUNCA debe depender de conexión para vender).
+La app ya NO usa `window.storage` (era exclusivo de artifacts de Claude.ai). Ahora
+usa **IndexedDB** (`idbGet`/`idbSet`, funciones `load()`, `save()`, `saveImgs()`),
+con migración automática desde `localStorage` si encuentra datos de una versión
+anterior. Además hay un service worker (`app/sw.js`, network-first para el HTML)
+que cachea la app para que funcione sin internet una vez visitada, y un manifest
+para poder instalarla desde Safari ("Agregar a inicio").
 
-Buscar en el código: `window.storage.get`, `window.storage.set` (funciones `load()`,
-`save()`, `saveImgs()`).
+Pendiente real para el producto comercial: SQLite/backend propio + respaldo en la
+nube (por ahora el respaldo es manual vía Admin → "Respaldo de datos", exporta/importa
+un `.json` con ventas, inventario, precios y fotos).
 
 ## Funcionalidades ya implementadas y probadas
 
-- **Vender**: grilla táctil por 9 categorías (~110 artículos), fotos de productos,
-  hoja de toppings (14 toppings), ticket con cantidades.
+- **Vender**: grilla táctil por 10 categorías (~115 artículos + "Varios" para
+  precio libre), fotos de productos, toppings (franja fija + hoja modal), ticket
+  con cantidades.
 - **Cobro**: efectivo (ingresa con cuánto pagó → calcula devuelta, botones de
   billetes rápidos) o tarjeta. Valida pago insuficiente.
 - **Inventario**: solo artículos marcados `track:true` (paletas, bolocups, jugos
@@ -47,25 +51,48 @@ Buscar en el código: `window.storage.get`, `window.storage.set` (funciones `loa
   fotos, códigos) bloqueada con código de administrador; sesión con botón de cerrar
   que pregunta antes de guardar. Códigos por defecto: supervisor `1234`,
   admin `2580` (cambiables en Admin).
-- **Fotos**: 87 fotos por defecto embebidas (DEFAULT_IMGS, por nombre de artículo).
+- **Fotos**: fotos por defecto embebidas (DEFAULT_IMGS, por nombre de artículo).
   El admin puede reemplazar cualquier foto desde cámara/galería (se recorta cuadrada
   y comprime a 140px, se guarda en IMGS por id). "Restaurar original" vuelve a la
   foto por defecto.
-- **Migración de datos**: función `migrar()` con flag `S.priceV` — aplica cambios
-  de precios/artículos a datos ya guardados sin borrar ventas ni stock.
+- **Fiados (cuentas por cobrar)**: tercer método en la hoja de cobro ("Fiado" +
+  nombre del cliente). Descuenta stock al momento pero NO cuenta como venta hasta
+  que se abona. Pestaña "Fiados": pendientes/pagados, saldo por cobrar, botón
+  Abonar (pago parcial o total, efectivo/tarjeta). Los abonos SÍ entran al total
+  del día y aparecen en el cierre como línea aparte. Anular fiado requiere código
+  de supervisor y devuelve el stock. `S.fiados = [{id, name, day, time, items,
+  total, units, abonos:[{day,time,monto,method}]}]`.
+- **Alertas de stock por WhatsApp**: cada artículo con inventario tiene `min`
+  configurable. Dos niveles: 🔴 rojo (stock ≤ min) y 🟡 amarillo/preventivo. Al
+  cobrar, si la venta deja artículos en alerta, se abre hoja con el mensaje armado.
+  Destinatarios por categoría en `S.waDest = [{num, name, cats:'all'|[catIds]}]` —
+  cada uno recibe solo sus categorías. Botón manual "Alertas de stock" en Inventario.
+  Pendiente para la versión comercial: envío 100% automático (WhatsApp Business
+  Cloud API / Twilio) en vez de abrir wa.me manualmente.
+- **Toppings**: franja fija debajo de la grilla (no solo hoja modal) — se toca un
+  topping y se agrega/quita del último producto del ticket con un toque.
+- **Venta varios**: categoría "Varios" con teclado numérico para cobrar cualquier
+  cosa fuera del catálogo (precio libre + descripción).
+- **Respaldo de datos**: Admin → exportar/importar un `.json` con ventas,
+  inventario, precios, fiados y fotos (ver sección de Persistencia arriba).
+- **Migración de datos**: función `migrar()` con flag `S.priceV` (va en `8`) —
+  aplica cambios de precios/artículos/estructura a datos ya guardados sin borrar
+  ventas ni stock.
 
 ## Modelo de datos (estado `S`)
 
 ```js
 S = {
   codes: { sup:'1234', adm:'2580' },
-  priceV: 2,                       // versión de migración de precios
+  priceV: 8,                       // versión de migración de precios/estructura
+  waDest: [{num, name, cats:'all'|[catId,...]}],   // destinatarios de alertas WhatsApp
   toppings: [{id, name, price}],
-  items: [{id, name, price, cat, track, stock, color}],
+  items: [{id, name, price, cat, track, stock, min, color}],
   sales: [{id, day:'YYYY-MM-DD', time, items:[{name, base, qty, price, itemId|null}],
-           total, units, method:'cash'|'card', paid, change}]
+           total, units, method:'cash'|'card'|'fiado', paid, change}],
+  fiados: [{id, name, day, time, items, total, units, abonos:[{day,time,monto,method}]}]
 }
-// Categorías (CATS): paletas, cups, waffles, cakes, desayunos, batidos, cafe, jugos, bebidas
+// Categorías (CATS): paletas, cups, waffles, cakes, desayunos, batidos, cafe, jugos, bebidas, varios
 // TOPCATS = ['paletas','cups','waffles'] → categorías que ofrecen toppings al vender
 // IMGS = {itemId: dataURL}  (fotos personalizadas, storage aparte)
 // DEFAULT_IMGS = {nombre: dataURL}  (fotos embebidas por defecto)
