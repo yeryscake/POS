@@ -100,8 +100,8 @@
 
   /* cobro */
   .pay-total{text-align:center; font-size:34px; font-weight:800; color:var(--purple); margin:6px 0 14px;}
-  .pay-method{display:flex; gap:10px; margin-bottom:14px;}
-  .pay-method button{flex:1; border:3px solid var(--line); border-radius:16px; background:#fff; font:inherit; font-weight:800; font-size:17px; padding:16px;}
+  .pay-method{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px;}
+  .pay-method button{flex:1 1 40%; border:3px solid var(--line); border-radius:16px; background:#fff; font:inherit; font-weight:800; font-size:16px; padding:14px 8px;}
   .pay-method button.on{border-color:var(--rose); background:var(--rose-soft); color:var(--rose-dark);}
   .bills{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0;}
   .bills button{flex:1; min-width:60px; border:none; border-radius:12px; background:var(--rose-soft); color:var(--rose-dark); font:inherit; font-weight:800; font-size:16px; padding:12px;}
@@ -154,6 +154,7 @@
   .mtag{font-size:11px; font-weight:800; padding:2px 8px; border-radius:999px;}
   .mtag.cash{background:#E1F5EE; color:var(--ok);}
   .mtag.card{background:#E7F0FF; color:#3568C9;}
+  .mtag.mixed{background:#F1E7FF; color:var(--purple);}
 
   /* cierre imprimible */
   #printArea{display:none;}
@@ -184,7 +185,7 @@
     <path d="M38 54 L41 81 M50 54 L50 83 M62 54 L59 81" stroke="#3A2A33" stroke-width="2" opacity=".55"/>
   </svg>
   <div class="logo">Yery'sCake <small>BONAIRE · KRALENDIJK</small></div>
-  <div class="hoy">Ventas de hoy<br><b id="hoyTotal">$0.00</b></div>
+  <div class="hoy">Ventas de hoy <span id="cloudIcon" style="font-size:13px"></span><br><b id="hoyTotal">$0.00</b></div>
 </header>
 
 <nav>
@@ -311,6 +312,7 @@
       <label style="font-weight:800">Día:</label>
       <input type="date" id="vFecha" onchange="render()">
       <button class="btn purple" onclick="verCierre()">🧾 Cierre del día</button>
+      <button class="btn" style="background:var(--danger)" onclick="abrirGasto()">💸 Registrar gasto</button>
     </div>
     <div class="stats" id="vStats"></div>
     <h2>Detalle de ventas <span style="font-weight:600; text-transform:none; letter-spacing:0">(✕ anula con código de supervisor)</span></h2>
@@ -337,12 +339,20 @@
     <div class="pay-method">
       <button id="mCash" class="on" onclick="setMetodo('cash')">💵 Efectivo</button>
       <button id="mCard" onclick="setMetodo('card')">💳 Tarjeta</button>
+      <button id="mMixto" onclick="setMetodo('mixed')">🔀 Mixto</button>
       <button id="mFiado" onclick="setMetodo('fiado')">🤝 Fiado</button>
     </div>
     <div id="fiadoZone" style="display:none">
       <label style="font-weight:800; font-size:14px">¿A nombre de quién queda el fiado?</label>
       <input type="text" class="pago-in" id="fiadoNombre" placeholder="Nombre de la persona" style="font-size:18px">
       <p style="font-size:13px; color:var(--cocoa-soft)">Se descuenta el inventario, pero NO cuenta como venta hasta que pague o abone.</p>
+    </div>
+    <div id="mixedZone" style="display:none">
+      <label style="font-weight:800; font-size:14px">💵 Parte en efectivo</label>
+      <input type="number" class="pago-in" id="mixCash" placeholder="0.00" step="0.01" inputmode="decimal" oninput="calcMixto()">
+      <label style="font-weight:800; font-size:14px">💳 Parte en tarjeta</label>
+      <input type="number" class="pago-in" id="mixCard" placeholder="0.00" step="0.01" inputmode="decimal" oninput="calcMixto()">
+      <div class="devuelta" id="mixResto">Falta repartir: $0.00</div>
     </div>
     <div id="cashZone">
       <label style="font-weight:800; font-size:14px">¿Con cuánto pagó el cliente?</label>
@@ -374,11 +384,11 @@
 <!-- Hoja de código supervisor -->
 <div class="sheet-bg" id="codeBg" onclick="if(event.target===this)cerrarCodigo()">
   <div class="sheet" style="max-width:420px">
-    <h3>🔒 Anular venta</h3>
-    <p style="color:var(--cocoa-soft); font-size:14px; margin:0 0 10px">Ingresa el código de supervisor para anular esta factura. Se devolverá el stock.</p>
+    <h3 id="codeTitle">🔒 Anular venta</h3>
+    <p id="codeDesc" style="color:var(--cocoa-soft); font-size:14px; margin:0 0 10px">Ingresa el código de supervisor para anular esta factura. Se devolverá el stock.</p>
     <input type="password" inputmode="numeric" autocomplete="off" class="pago-in" id="codeIn" placeholder="••••" onkeydown="if(event.key==='Enter')confirmarCodigo()">
     <div style="height:12px"></div>
-    <button class="big purple" onclick="confirmarCodigo()">Anular venta</button>
+    <button class="big purple" id="codeBtn" onclick="confirmarCodigo()">Anular venta</button>
     <button class="big ghost" onclick="cerrarCodigo()" style="color:var(--cocoa-soft)">Cancelar</button>
   </div>
 </div>
@@ -416,6 +426,34 @@
   </div>
 </div>
 
+<!-- Hoja de gasto / compra de caja -->
+<div class="sheet-bg" id="gastoBg" onclick="if(event.target===this)$('gastoBg').classList.remove('open')">
+  <div class="sheet" style="max-width:460px">
+    <h3>💸 Registrar gasto / compra</h3>
+    <p style="color:var(--cocoa-soft); font-size:14px; margin:0 0 10px">Para cuando se saca dinero de la caja para comprar algo (pan, bananos, etc). Se descuenta del efectivo o tarjeta del día.</p>
+    <input type="text" id="gastoDesc" placeholder="¿Qué se compró?" style="width:100%; margin-bottom:10px">
+    <input type="number" class="pago-in" id="gastoMonto" placeholder="0.00" step="0.01" inputmode="decimal">
+    <div class="pay-method" style="margin-top:12px">
+      <button id="gmCash" class="on" onclick="setGastoMetodo('cash')">💵 Efectivo</button>
+      <button id="gmCard" onclick="setGastoMetodo('card')">💳 Tarjeta</button>
+    </div>
+    <div style="margin:14px 0">
+      <button class="btn" onclick="$('gastoFotoInput').click()">📷 Adjuntar factura (opcional)</button>
+      <div id="gastoFotoPrev"></div>
+    </div>
+    <button class="big purple" onclick="guardarGasto()">Guardar gasto</button>
+    <button class="big ghost" onclick="$('gastoBg').classList.remove('open')" style="color:var(--cocoa-soft)">Cancelar</button>
+  </div>
+</div>
+
+<!-- Ver foto de factura -->
+<div class="sheet-bg" id="fotoVerBg" onclick="if(event.target===this)$('fotoVerBg').classList.remove('open')">
+  <div class="sheet" style="max-width:520px; text-align:center">
+    <img id="fotoVerImg" style="max-width:100%; border-radius:14px; margin-bottom:12px" src="">
+    <button class="big ghost" onclick="$('fotoVerBg').classList.remove('open')" style="color:var(--cocoa-soft)">Cerrar</button>
+  </div>
+</div>
+
 <!-- Hoja de alerta de stock -->
 <div class="sheet-bg" id="waBg" onclick="if(event.target===this)$('waBg').classList.remove('open')">
   <div class="sheet">
@@ -427,9 +465,15 @@
 </div>
 
 <input type="file" id="fotoInput" accept="image/*" style="display:none" onchange="fotoElegida(event)">
+<input type="file" id="gastoFotoInput" accept="image/*" style="display:none" onchange="gastoFotoElegida(event)">
 <div id="printArea"></div>
 <div class="msg" id="msg"></div>
 
+<!-- Firebase (sincronización en la nube). Si falla o no hay internet, la app
+     sigue funcionando 100% local — la nube es opcional, nunca bloquea la venta. -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script>
 const PALETTE = ['#FF6B81','#FFB84D','#FFE066','#7BD88F','#3FBFA8','#6BB8FF','#B58CFF','#8A5A44','#F2F2F2','#FF8FB1','#E63950','#25B8C9'];
 const CATS = [
@@ -465,6 +509,50 @@ let payMetodo='cash';
 let adminOn=false;
 
 const $ = id => document.getElementById(id);
+
+/* ── SINCRONIZACIÓN EN LA NUBE (Firebase, opcional) ──
+   Mientras FIREBASE_CONFIG tenga los valores de ejemplo, la nube queda
+   desactivada y la app funciona exactamente igual que antes (100% local).
+   Una vez configurado: cada venta/gasto/cambio de precio se sube solo, en
+   segundo plano, sin bloquear la venta si no hay internet. */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAqVskewBiki0TJFgXcLIwIQPHbwCnrzgk",
+  authDomain: "yeryscake-pos.firebaseapp.com",
+  projectId: "yeryscake-pos",
+  storageBucket: "yeryscake-pos.firebasestorage.app",
+  messagingSenderId: "977596164835",
+  appId: "1:977596164835:web:c18eb74d0c41827c0a73d6"
+};
+let cloudDb = null;
+if(typeof firebase !== 'undefined' && FIREBASE_CONFIG.apiKey !== 'PEGAR_AQUI'){
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    cloudDb = firebase.firestore();
+    firebase.auth().signInAnonymously().catch(()=>{});
+  }catch(e){ cloudDb = null; }
+}
+function cloudReady(){ return !!cloudDb; }
+function setCloudStatus(ok){
+  const el = $('cloudIcon'); if(!el) return;
+  el.textContent = ok===null ? '' : ok ? '☁️' : '📴';
+  el.title = ok===null ? '' : ok ? 'Sincronizado con la nube' : 'Sin internet — se sincronizará más tarde';
+}
+async function cloudSync(){
+  if(!cloudReady()){ setCloudStatus(null); return; }
+  const day = hoyISO();
+  try{
+    await Promise.all([
+      cloudDb.collection('catalog').doc('main').set({items:S.items, toppings:S.toppings, priceV:S.priceV, updatedAt:Date.now()}),
+      cloudDb.collection('days').doc(day).set({sales:S.sales.filter(v=>v.day===day), gastos:(S.gastos||[]).filter(g=>g.day===day), updatedAt:Date.now()}),
+      cloudDb.collection('fiados').doc('main').set({list:S.fiados, updatedAt:Date.now()}),
+    ]);
+    setCloudStatus(true);
+  }catch(e){ setCloudStatus(false); }
+}
+function cloudSyncDay(day){
+  if(!cloudReady()) return;
+  cloudDb.collection('days').doc(day).set({sales:S.sales.filter(v=>v.day===day), gastos:(S.gastos||[]).filter(g=>g.day===day), updatedAt:Date.now()}).catch(()=>{});
+}
 const abc = arr => arr.slice().sort((a,b)=>a.name.localeCompare(b.name,'es'));
 const fmt = n => '$' + n.toFixed(2);
 const hoyISO = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
@@ -572,7 +660,8 @@ function seed(){
       it('Agua',1.50,'bebidas',1,24),
     ],
     sales:[],
-    fiados:[]
+    fiados:[],
+    gastos:[]
   };
 }
 
@@ -730,9 +819,27 @@ async function load(){
     }catch(e2){ IMGS = {}; }
   }
   if(!S.codes) S.codes = {sup:'1234', adm:'2580'};
+  S.gastos = S.gastos || [];
   if(migrar()) await save();
-  $('vFecha').value = hoyISO();
+  ultimoDia = hoyISO();
+  $('vFecha').value = ultimoDia;
   render();
+  setInterval(checkNuevoDia, 60000);
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) checkNuevoDia(); });
+}
+/* La app puede quedar abierta de un día para otro (PWA en segundo plano). Esto
+   detecta el cambio de fecha y refresca la pantalla de Ventas sin recargar. */
+let ultimoDia = null;
+function checkNuevoDia(){
+  const hoy = hoyISO();
+  if(ultimoDia && hoy!==ultimoDia){
+    if($('vFecha').value===ultimoDia) $('vFecha').value = hoy;
+    ultimoDia = hoy;
+    render();
+    toast('📅 Nuevo día: ya está facturando en ' + hoy);
+  } else if(!ultimoDia){
+    ultimoDia = hoy;
+  }
 }
 async function saveImgs(){
   try{ await idbSet(KEY+'-imgs', IMGS); }
@@ -741,6 +848,7 @@ async function saveImgs(){
 async function save(){
   try{ await idbSet(KEY, S); }
   catch(e){ toast('⚠️ No se pudo guardar'); }
+  cloudSync(); // en segundo plano: no espera respuesta, nunca bloquea la venta
 }
 function exportarRespaldo(){
   const data = {app:'yeryscake-pos', version:1, exportedAt:new Date().toISOString(), S, IMGS};
@@ -773,6 +881,7 @@ function toast(t){
 
 /* ── NAVEGACIÓN ── */
 function go(p){
+  checkNuevoDia();
   ['vender','inv','fiados','admin','ventas'].forEach(x=>{ $('pg-'+x).style.display = x===p?'':'none'; });
   $('tabVender').classList.toggle('act',p==='vender');
   $('tabInv').classList.toggle('act',p==='inv');
@@ -919,11 +1028,12 @@ function renderTicket(){
 function abrirCobro(){
   if(!ticket.length) return;
   payMetodo='cash';
-  $('mCash').classList.add('on'); $('mCard').classList.remove('on'); $('mFiado').classList.remove('on');
-  $('cashZone').style.display=''; $('fiadoZone').style.display='none';
+  $('mCash').classList.add('on'); $('mCard').classList.remove('on'); $('mMixto').classList.remove('on'); $('mFiado').classList.remove('on');
+  $('cashZone').style.display=''; $('fiadoZone').style.display='none'; $('mixedZone').style.display='none';
   $('fiadoNombre').value=''; $('btnConfirmar').textContent='Confirmar venta';
   $('payTotal').textContent = fmt(tkTotal());
   $('pagoCon').value=''; calcDevuelta();
+  $('mixCash').value=''; $('mixCard').value=''; calcMixto();
   $('payBg').classList.add('open');
 }
 function cerrarCobro(){ $('payBg').classList.remove('open'); }
@@ -931,9 +1041,11 @@ function setMetodo(m){
   payMetodo=m;
   $('mCash').classList.toggle('on',m==='cash');
   $('mCard').classList.toggle('on',m==='card');
+  $('mMixto').classList.toggle('on',m==='mixed');
   $('mFiado').classList.toggle('on',m==='fiado');
   $('cashZone').style.display = m==='cash' ? '' : 'none';
   $('fiadoZone').style.display = m==='fiado' ? '' : 'none';
+  $('mixedZone').style.display = m==='mixed' ? '' : 'none';
   $('btnConfirmar').textContent = m==='fiado' ? 'Registrar fiado' : 'Confirmar venta';
 }
 function setPago(v){
@@ -948,13 +1060,27 @@ function calcDevuelta(){
   if(dev < 0){ el.textContent='Falta: ' + fmt(Math.abs(dev)); el.classList.add('neg'); }
   else{ el.textContent='Devuelta: ' + fmt(dev); el.classList.remove('neg'); }
 }
+function calcMixto(){
+  const cash = parseFloat($('mixCash').value)||0;
+  const card = parseFloat($('mixCard').value)||0;
+  const resto = tkTotal() - cash - card;
+  const el = $('mixResto');
+  if(Math.abs(resto) < 0.005){ el.textContent = '✅ Listo, cuadra con el total'; el.classList.remove('neg'); }
+  else if(resto > 0){ el.textContent = 'Falta repartir: ' + fmt(resto); el.classList.add('neg'); }
+  else{ el.textContent = 'Sobran ' + fmt(Math.abs(resto)) + ' — ajusta los montos'; el.classList.add('neg'); }
+}
 async function confirmarCobro(){
   const total = tkTotal();
-  let paid=null, change=null, fiadoNombre='';
+  let paid=null, change=null, fiadoNombre='', cashPart=null, cardPart=null;
   if(payMetodo==='cash'){
     paid = parseFloat($('pagoCon').value)||0;
     if(paid < total){ toast('El pago no alcanza el total'); return; }
     change = paid - total;
+  }
+  if(payMetodo==='mixed'){
+    cashPart = parseFloat($('mixCash').value)||0;
+    cardPart = parseFloat($('mixCard').value)||0;
+    if(Math.abs(cashPart + cardPart - total) > 0.01){ toast('Efectivo + tarjeta debe sumar el total ('+fmt(total)+')'); return; }
   }
   if(payMetodo==='fiado'){
     fiadoNombre = $('fiadoNombre').value.trim();
@@ -976,7 +1102,7 @@ async function confirmarCobro(){
   if(payMetodo==='fiado'){
     S.fiados.push(Object.assign(registro, {name:fiadoNombre, abonos:[]}));
   } else {
-    S.sales.push(Object.assign(registro, {method:payMetodo, paid, change}));
+    S.sales.push(Object.assign(registro, {method:payMetodo, paid, change, cashPart, cardPart}));
   }
   const idsVendidos = new Set(ticket.filter(i=>i.track).map(i=>i.itemId));
   ticket=[];
@@ -1073,6 +1199,9 @@ async function confirmarAbono(){
 }
 function anularFiado(id){
   anularId = id; anularTipo = 'fiado';
+  $('codeTitle').textContent = '🔒 Anular fiado';
+  $('codeDesc').textContent = 'Ingresa el código de supervisor para anular este fiado. Se devolverá el stock.';
+  $('codeBtn').textContent = 'Anular fiado';
   $('codeIn').value = '';
   $('codeBg').classList.add('open');
   setTimeout(()=>$('codeIn').focus(), 100);
@@ -1112,13 +1241,14 @@ function mostrarAlertas(lows){
   const btns = (S.waDest||[]).map(d=>{
     const sub = lows.filter(x=> d.cats==='all' || (Array.isArray(d.cats) && d.cats.includes(x.f.cat)));
     if(!sub.length) return '';
-    const enc = encodeURIComponent(msgAlerta(sub));
+    const url = `https://wa.me/${d.num}?text=${encodeURIComponent(msgAlerta(sub))}`;
     const etiqueta = d.name ? `${d.name} (+${d.num})` : `+${d.num}`;
-    return `<button class="big" style="margin-bottom:8px" onclick="window.open('https://wa.me/${d.num}?text=${enc}','_blank')">📲 ${etiqueta}</button>`;
+    return `<button class="big" style="margin-bottom:8px" data-wa="${url}">📲 ${etiqueta}</button>`;
   }).join('');
-  const encAll = encodeURIComponent(msg);
+  const urlAll = `https://wa.me/?text=${encodeURIComponent(msg)}`;
   $('waBotones').innerHTML = btns +
-    `<button class="big purple" style="margin-bottom:8px" onclick="window.open('https://wa.me/?text=${encAll}','_blank')">📲 Elegir chat o grupo</button>`;
+    `<button class="big purple" style="margin-bottom:8px" data-wa="${urlAll}">📲 Elegir chat o grupo</button>`;
+  $('waBotones').querySelectorAll('[data-wa]').forEach(b=>{ b.onclick = () => { location.href = b.getAttribute('data-wa'); }; });
   $('waBg').classList.add('open');
 }
 
@@ -1126,6 +1256,18 @@ function mostrarAlertas(lows){
 let anularId = null, anularTipo = 'venta';
 function anularVenta(id){
   anularId = id; anularTipo = 'venta';
+  $('codeTitle').textContent = '🔒 Anular venta';
+  $('codeDesc').textContent = 'Ingresa el código de supervisor para anular esta factura. Se devolverá el stock.';
+  $('codeBtn').textContent = 'Anular venta';
+  $('codeIn').value = '';
+  $('codeBg').classList.add('open');
+  setTimeout(()=>$('codeIn').focus(), 100);
+}
+function anularGasto(id){
+  anularId = id; anularTipo = 'gasto';
+  $('codeTitle').textContent = '🔒 Eliminar gasto';
+  $('codeDesc').textContent = 'Ingresa el código de supervisor para eliminar este gasto.';
+  $('codeBtn').textContent = 'Eliminar gasto';
   $('codeIn').value = '';
   $('codeBg').classList.add('open');
   setTimeout(()=>$('codeIn').focus(), 100);
@@ -1134,20 +1276,79 @@ function cerrarCodigo(){ $('codeBg').classList.remove('open'); anularId = null; 
 async function confirmarCodigo(){
   const code = $('codeIn').value;
   if(code!==S.codes.sup && code!==S.codes.adm){ toast('❌ Código incorrecto'); $('codeIn').value=''; return; }
-  const lista = anularTipo==='fiado' ? S.fiados : S.sales;
+  const lista = anularTipo==='fiado' ? S.fiados : anularTipo==='gasto' ? S.gastos : S.sales;
   const idx = lista.findIndex(v=>v.id===anularId);
   cerrarCodigo();
   if(idx<0) return;
   const v = lista[idx];
-  for(const itk of v.items){
-    if(itk.itemId){
-      const f = S.items.find(x=>x.id===itk.itemId);
-      if(f) f.stock += itk.qty;
+  if(anularTipo!=='gasto'){
+    for(const itk of v.items){
+      if(itk.itemId){
+        const f = S.items.find(x=>x.id===itk.itemId);
+        if(f) f.stock += itk.qty;
+      }
     }
   }
   lista.splice(idx,1);
   await save(); render();
-  toast((anularTipo==='fiado'?'Fiado anulado (':'Venta anulada (') + fmt(v.total) + ')');
+  if(anularTipo!=='fiado' && v.day && v.day!==hoyISO()) cloudSyncDay(v.day);
+  toast(anularTipo==='fiado' ? 'Fiado anulado (' + fmt(v.total) + ')'
+      : anularTipo==='gasto' ? 'Gasto eliminado (' + fmt(v.monto) + ')'
+      : 'Venta anulada (' + fmt(v.total) + ')');
+}
+
+/* ── GASTOS / COMPRAS DE CAJA ── */
+let gastoMetodo = 'cash', gastoFotoTmp = null;
+function abrirGasto(){
+  gastoMetodo = 'cash'; gastoFotoTmp = null;
+  $('gastoDesc').value=''; $('gastoMonto').value='';
+  $('gmCash').classList.add('on'); $('gmCard').classList.remove('on');
+  $('gastoFotoPrev').innerHTML = '';
+  $('gastoBg').classList.add('open');
+}
+function setGastoMetodo(m){
+  gastoMetodo = m;
+  $('gmCash').classList.toggle('on', m==='cash');
+  $('gmCard').classList.toggle('on', m==='card');
+}
+function gastoFotoElegida(ev){
+  const file = ev.target.files && ev.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const max = 900;
+      const scale = Math.min(1, max/Math.max(img.width, img.height));
+      const w = Math.round(img.width*scale), h = Math.round(img.height*scale);
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      gastoFotoTmp = c.toDataURL('image/jpeg', 0.75);
+      $('gastoFotoPrev').innerHTML = `<img src="${gastoFotoTmp}" style="max-width:100%; border-radius:12px; margin-top:8px">`;
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+async function guardarGasto(){
+  const desc = $('gastoDesc').value.trim();
+  const monto = parseFloat($('gastoMonto').value)||0;
+  if(!desc){ toast('Escribe qué se compró'); return; }
+  if(monto<=0){ toast('Escribe el monto'); return; }
+  S.gastos = S.gastos || [];
+  S.gastos.push({id:uid(), day:hoyISO(),
+    time:new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'}),
+    desc, monto, method:gastoMetodo, foto:gastoFotoTmp});
+  $('gastoBg').classList.remove('open');
+  await save(); render();
+  toast('💸 Gasto registrado: '+desc+' — '+fmt(monto));
+}
+function verFoto(id){
+  const g = (S.gastos||[]).find(x=>x.id===id);
+  if(!g || !g.foto) return;
+  $('fotoVerImg').src = g.foto;
+  $('fotoVerBg').classList.add('open');
 }
 
 /* ── INVENTARIO ── */
@@ -1354,8 +1555,8 @@ async function guardarCodigos(){
 /* ── VENTAS Y CIERRE ── */
 function datosDia(day){
   const vs = S.sales.filter(v=>v.day===day);
-  const cash = vs.filter(v=>v.method==='cash').reduce((a,v)=>a+v.total,0);
-  const card = vs.filter(v=>v.method==='card').reduce((a,v)=>a+v.total,0);
+  const cash = vs.reduce((a,v)=>a+(v.method==='cash'?v.total : v.method==='mixed'?v.cashPart : 0),0);
+  const card = vs.reduce((a,v)=>a+(v.method==='card'?v.total : v.method==='mixed'?v.cardPart : 0),0);
   const abonosDia = [];
   (S.fiados||[]).forEach(f=>(f.abonos||[]).forEach(a=>{ if(a.day===day) abonosDia.push({...a, name:f.name}); }));
   const cashA = abonosDia.filter(a=>a.method==='cash').reduce((s,a)=>s+a.monto,0);
@@ -1372,25 +1573,34 @@ function datosDia(day){
   });
   vs.forEach(sumar);
   fsDia.forEach(sumar); // mercancía fiada cuenta como salida de almacén
-  return {vs, cash, card, cashA, cardA, abonosDia, total, units, unitsFiado, porItem};
+  const gastosDia = (S.gastos||[]).filter(g=>g.day===day);
+  const gastosCash = gastosDia.filter(g=>g.method==='cash').reduce((s,g)=>s+g.monto,0);
+  const gastosCard = gastosDia.filter(g=>g.method==='card').reduce((s,g)=>s+g.monto,0);
+  const cashNeto = cash + cashA - gastosCash;
+  const cardNeto = card + cardA - gastosCard;
+  return {vs, cash, card, cashA, cardA, abonosDia, total, units, unitsFiado, porItem, gastosDia, gastosCash, gastosCard, cashNeto, cardNeto};
 }
+function metodoLabel(m){ return m==='cash'?'💵 Efectivo' : m==='card'?'💳 Tarjeta' : '🔀 Mixto'; }
 function renderVentas(){
   const day = $('vFecha').value || hoyISO();
   const d = datosDia(day);
   const top = Object.entries(d.porItem).sort((a,b)=>b[1].qty-a[1].qty)[0];
   $('vStats').innerHTML = `
     <div class="stat"><b>${fmt(d.total)}</b><span>Total del día</span></div>
-    <div class="stat"><b>${fmt(d.cash + d.cashA)}</b><span>💵 Efectivo</span></div>
-    <div class="stat"><b>${fmt(d.card + d.cardA)}</b><span>💳 Tarjeta</span></div>
+    <div class="stat"><b>${fmt(d.cash + d.cashA)}</b><span>💵 Efectivo cobrado</span></div>
+    <div class="stat"><b>${fmt(d.card + d.cardA)}</b><span>💳 Tarjeta cobrada</span></div>
     <div class="stat"><b>${fmt(d.cashA + d.cardA)}</b><span>🤝 Abonos fiados</span></div>
+    ${d.gastosDia.length ? `
+    <div class="stat" style="color:var(--danger)"><b>-${fmt(d.gastosCash + d.gastosCard)}</b><span>💸 Gastos/compras</span></div>
+    <div class="stat"><b>${fmt(d.cashNeto)}</b><span>💰 Efectivo neto en caja</span></div>` : ''}
     <div class="stat"><b>${d.vs.length}</b><span>Ventas</span></div>
     <div class="stat"><b>${d.units}</b><span>Unidades salidas${d.unitsFiado?` (${d.unitsFiado} fiadas)`:''}</span></div>
     <div class="stat"><b style="font-size:15px">${top?top[0]+' ('+top[1].qty+')':'—'}</b><span>Más vendido</span></div>`;
   $('vList').innerHTML = d.vs.length ? d.vs.slice().reverse().map(v=>`
     <div class="sale">
       <div class="bd">
-        <div class="hd"><span>🕐 ${v.time} <span class="mtag ${v.method}">${v.method==='cash'?'💵 Efectivo':'💳 Tarjeta'}</span></span><span>${fmt(v.total)}</span></div>
-        <div class="det">${v.items.map(i=>i.qty+'× '+i.name).join(' · ')}${v.method==='cash'&&v.paid!=null?` — Pagó ${fmt(v.paid)}, devuelta ${fmt(v.change)}`:''}</div>
+        <div class="hd"><span>🕐 ${v.time} <span class="mtag ${v.method}">${metodoLabel(v.method)}</span></span><span>${fmt(v.total)}</span></div>
+        <div class="det">${v.items.map(i=>i.qty+'× '+i.name).join(' · ')}${v.method==='cash'&&v.paid!=null?` — Pagó ${fmt(v.paid)}, devuelta ${fmt(v.change)}`:''}${v.method==='mixed'?` — 💵 ${fmt(v.cashPart)} + 💳 ${fmt(v.cardPart)}`:''}</div>
       </div>
       <button class="del" onclick="anularVenta('${v.id}')">✕</button>
     </div>`).join('')
@@ -1398,8 +1608,18 @@ function renderVentas(){
   if(d.abonosDia.length){
     $('vList').innerHTML += d.abonosDia.slice().reverse().map(a=>`
       <div class="sale"><div class="bd">
-        <div class="hd"><span>🤝 ${a.time} Abono de ${a.name} <span class="mtag ${a.method}">${a.method==='cash'?'💵 Efectivo':'💳 Tarjeta'}</span></span><span>${fmt(a.monto)}</span></div>
+        <div class="hd"><span>🤝 ${a.time} Abono de ${a.name} <span class="mtag ${a.method}">${metodoLabel(a.method)}</span></span><span>${fmt(a.monto)}</span></div>
       </div></div>`).join('');
+  }
+  if(d.gastosDia.length){
+    $('vList').innerHTML += d.gastosDia.slice().reverse().map(g=>`
+      <div class="sale">
+        <div class="bd">
+          <div class="hd"><span>💸 ${g.time} ${g.desc} <span class="mtag ${g.method}">${metodoLabel(g.method)}</span></span><span>-${fmt(g.monto)}</span></div>
+          ${g.foto?`<div class="det"><img class="thumb" style="width:44px; height:44px; cursor:pointer" src="${g.foto}" onclick="verFoto('${g.id}')"></div>`:''}
+        </div>
+        <button class="del" onclick="anularGasto('${g.id}')">✕</button>
+      </div>`).join('');
   }
 }
 function verCierre(){
@@ -1407,6 +1627,7 @@ function verCierre(){
   const d = datosDia(day);
   const filas = Object.entries(d.porItem).sort((a,b)=>b[1].qty-a[1].qty)
     .map(([n,x])=>`<tr><td>${n}</td><td>${x.qty}</td><td>${fmt(x.monto)}</td></tr>`).join('');
+  const gastosFilas = d.gastosDia.map(g=>`<tr><td>${g.desc}</td><td>${g.method==='cash'?'Efectivo':'Tarjeta'}</td><td>-${fmt(g.monto)}</td></tr>`).join('');
   const html = `
     <h3 style="margin:0">🧾 Cierre del día — Yery'sCake Bonaire</h3>
     <p style="margin:4px 0 12px; color:#777; font-weight:700">${day}</p>
@@ -1416,7 +1637,13 @@ function verCierre(){
       <tr><td>💳 Tarjeta (ventas)</td><td></td><td><b>${fmt(d.card)}</b></td></tr>
       <tr><td>🤝 Abonos de fiados (efectivo)</td><td></td><td><b>${fmt(d.cashA)}</b></td></tr>
       <tr><td>🤝 Abonos de fiados (tarjeta)</td><td></td><td><b>${fmt(d.cardA)}</b></td></tr>
-      <tr><td><b>TOTAL DEL DÍA</b></td><td></td><td><b>${fmt(d.total)}</b></td></tr>
+      ${d.gastosDia.length ? `
+      <tr><td>💸 Gastos/compras (efectivo)</td><td></td><td>-${fmt(d.gastosCash)}</td></tr>
+      <tr><td>💸 Gastos/compras (tarjeta)</td><td></td><td>-${fmt(d.gastosCard)}</td></tr>` : ''}
+      <tr><td><b>TOTAL DEL DÍA (ventas)</b></td><td></td><td><b>${fmt(d.total)}</b></td></tr>
+      ${d.gastosDia.length ? `
+      <tr><td><b>💰 Efectivo neto en caja</b></td><td></td><td><b>${fmt(d.cashNeto)}</b></td></tr>
+      <tr><td><b>💳 Tarjeta neta</b></td><td></td><td><b>${fmt(d.cardNeto)}</b></td></tr>` : ''}
       <tr><td>Pendiente por cobrar (todos los fiados)</td><td></td><td>${fmt(S.fiados.reduce((a,f)=>a+saldoDe(f),0))}</td></tr>
       <tr><td>Número de ventas</td><td></td><td>${d.vs.length}</td></tr>
       <tr><td>Unidades salidas del almacén</td><td></td><td>${d.units}</td></tr>
@@ -1425,7 +1652,12 @@ function verCierre(){
     <table class="cierre-tabla">
       <tr><th>Artículo (incluye mercancía fiada)</th><th>Cant.</th><th>Valor</th></tr>
       ${filas || '<tr><td colspan="3">Sin ventas</td></tr>'}
-    </table>`;
+    </table>
+    ${d.gastosDia.length ? `
+    <table class="cierre-tabla">
+      <tr><th>Gastos / compras del día</th><th>Método</th><th>Monto</th></tr>
+      ${gastosFilas}
+    </table>` : ''}`;
   $('cierreBody').innerHTML = html;
   $('printArea').innerHTML = html;
   $('cierreBg').classList.add('open');

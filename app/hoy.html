@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Yery'sCake · Ventas de hoy</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="apple-touch-icon" href="./icons/icon-180.png">
+<style>
+  :root{
+    --bgpink:#FFEDF4; --rose:#F26AA0; --rose-dark:#D94F87; --rose-soft:#FFD9E8;
+    --purple:#7C4DBE; --cocoa:#3A2A33; --cocoa-soft:#8F7383;
+    --card:#FFFFFF; --line:#F3D6E2; --danger:#E05548; --ok:#2E9C89;
+    --radius:18px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0; padding:0;}
+  body{
+    font-family: ui-rounded, "SF Pro Rounded", -apple-system, "Segoe UI", sans-serif;
+    background:var(--bgpink); color:var(--cocoa); padding:16px; padding-bottom:60px;
+  }
+  header{text-align:center; margin-bottom:16px;}
+  header h1{font-size:19px; margin:0 0 2px;}
+  header p{margin:0; color:var(--cocoa-soft); font-size:13px; font-weight:700;}
+  .estado{text-align:center; font-size:12px; font-weight:800; margin-bottom:14px; color:var(--cocoa-soft);}
+  .estado.on{color:var(--ok);}
+  .estado.off{color:var(--danger);}
+  .stats{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;}
+  .stat{background:var(--card); border-radius:var(--radius); padding:16px 10px; box-shadow:0 2px 0 var(--line); text-align:center;}
+  .stat.wide{grid-column:1 / -1;}
+  .stat b{display:block; font-size:26px; color:var(--purple);}
+  .stat span{font-size:11px; color:var(--cocoa-soft); font-weight:800; text-transform:uppercase; letter-spacing:.5px;}
+  .stat.danger b{color:var(--danger);}
+  .stat.ok b{color:var(--ok);}
+  h2{font-size:14px; margin:18px 4px 8px; color:var(--cocoa-soft); text-transform:uppercase; letter-spacing:1px;}
+  .sale{background:var(--card); border-radius:14px; padding:10px 14px; margin-bottom:6px; box-shadow:0 2px 0 var(--line); font-size:14px; display:flex; justify-content:space-between; gap:10px;}
+  .sale .t{color:var(--cocoa-soft); font-weight:700; font-size:12px;}
+  .vacio{color:var(--cocoa-soft); text-align:center; padding:24px 8px; font-size:14px;}
+  .config{max-width:480px; margin:60px auto; text-align:center; background:#fff; border-radius:22px; padding:28px; box-shadow:0 2px 0 var(--line);}
+  .config .ic{font-size:40px;}
+</style>
+</head>
+<body>
+
+<div id="configAviso" class="config" style="display:none">
+  <div class="ic">⚙️</div>
+  <h3>Falta configurar Firebase</h3>
+  <p style="color:var(--cocoa-soft); font-size:14px">Pega el mismo <code>FIREBASE_CONFIG</code> que usaste en la app principal, dentro de este archivo (<code>app/hoy.html</code>).</p>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <h1>🍦 Yery'sCake Bonaire</h1>
+    <p id="fecha">—</p>
+  </header>
+  <div class="estado" id="estado">Conectando…</div>
+
+  <div class="stats">
+    <div class="stat wide"><b id="sTotal">$0.00</b><span>Total del día</span></div>
+    <div class="stat"><b id="sCash">$0.00</b><span>💵 Efectivo cobrado</span></div>
+    <div class="stat"><b id="sCard">$0.00</b><span>💳 Tarjeta cobrada</span></div>
+    <div class="stat" id="boxGastos" style="display:none"><b id="sGastos">$0.00</b><span>💸 Gastos/compras</span></div>
+    <div class="stat ok" id="boxNeto" style="display:none"><b id="sNeto">$0.00</b><span>💰 Efectivo neto en caja</span></div>
+    <div class="stat"><b id="sVentas">0</b><span>Ventas</span></div>
+    <div class="stat"><b id="sUnidades">0</b><span>Unidades salidas</span></div>
+  </div>
+
+  <h2>Últimas ventas</h2>
+  <div id="lista"><div class="vacio">Sin ventas todavía</div></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script>
+/* Pega aquí el MISMO FIREBASE_CONFIG que pusiste en yeryscake-pos-v2.html */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAqVskewBiki0TJFgXcLIwIQPHbwCnrzgk",
+  authDomain: "yeryscake-pos.firebaseapp.com",
+  projectId: "yeryscake-pos",
+  storageBucket: "yeryscake-pos.firebasestorage.app",
+  messagingSenderId: "977596164835",
+  appId: "1:977596164835:web:c18eb74d0c41827c0a73d6"
+};
+
+const $ = id => document.getElementById(id);
+const fmt = n => '$' + (n||0).toFixed(2);
+const hoyISO = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+
+if(FIREBASE_CONFIG.apiKey === 'PEGAR_AQUI'){
+  $('configAviso').style.display = '';
+} else {
+  $('app').style.display = '';
+  firebase.initializeApp(FIREBASE_CONFIG);
+  const db = firebase.firestore();
+  let unsub = null, diaActual = null;
+
+  function pintar(dayId, data){
+    const sales = (data && data.sales) || [];
+    const gastos = (data && data.gastos) || [];
+    const cash = sales.reduce((a,v)=>a+(v.method==='cash'?v.total : v.method==='mixed'?v.cashPart : 0),0);
+    const card = sales.reduce((a,v)=>a+(v.method==='card'?v.total : v.method==='mixed'?v.cardPart : 0),0);
+    const total = cash + card;
+    const gastosCash = gastos.filter(g=>g.method==='cash').reduce((s,g)=>s+g.monto,0);
+    const gastosCard = gastos.filter(g=>g.method==='card').reduce((s,g)=>s+g.monto,0);
+    const gastosTotal = gastosCash + gastosCard;
+    const units = sales.reduce((a,v)=>a+(v.units||0),0);
+
+    $('fecha').textContent = dayId;
+    $('sTotal').textContent = fmt(total);
+    $('sCash').textContent = fmt(cash);
+    $('sCard').textContent = fmt(card);
+    $('sVentas').textContent = sales.length;
+    $('sUnidades').textContent = units;
+    if(gastosTotal > 0){
+      $('boxGastos').style.display = ''; $('boxNeto').style.display = '';
+      $('sGastos').textContent = '-' + fmt(gastosTotal);
+      $('sNeto').textContent = fmt(cash - gastosCash);
+    } else {
+      $('boxGastos').style.display = 'none'; $('boxNeto').style.display = 'none';
+    }
+    $('lista').innerHTML = sales.length ? sales.slice().reverse().slice(0,30).map(v=>`
+      <div class="sale">
+        <div><b>${v.items.map(i=>i.qty+'× '+i.name).join(', ')}</b><div class="t">${v.time} · ${v.method==='cash'?'💵 Efectivo':v.method==='card'?'💳 Tarjeta':'🔀 Mixto'}</div></div>
+        <div>${fmt(v.total)}</div>
+      </div>`).join('') : '<div class="vacio">Sin ventas todavía</div>';
+  }
+
+  function suscribir(){
+    const day = hoyISO();
+    if(day === diaActual) return;
+    diaActual = day;
+    if(unsub) unsub();
+    unsub = db.collection('days').doc(day).onSnapshot(
+      doc => { $('estado').textContent = '🟢 En vivo — actualizado ' + new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'}); $('estado').className='estado on'; pintar(day, doc.data()); },
+      err => { $('estado').textContent = '🔴 Sin conexión con la nube'; $('estado').className='estado off'; }
+    );
+  }
+  suscribir();
+  setInterval(suscribir, 60000);
+}
+</script>
+</body>
+</html>
