@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Yery'sCake · Producción en vivo</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="apple-touch-icon" href="./icons/icon-180.png">
+<style>
+  :root{
+    --bgpink:#FFEDF4; --rose:#F26AA0; --rose-dark:#D94F87; --rose-soft:#FFD9E8;
+    --purple:#7C4DBE; --cocoa:#3A2A33; --cocoa-soft:#8F7383;
+    --card:#FFFFFF; --line:#F3D6E2; --danger:#E05548; --ok:#2E9C89; --warn:#B87A00;
+    --radius:18px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0;}
+  body{
+    font-family: ui-rounded, "SF Pro Rounded", -apple-system, "Segoe UI", sans-serif;
+    background:var(--bgpink); color:var(--cocoa); padding:16px; padding-bottom:60px;
+    -webkit-user-select:none; user-select:none;
+  }
+  header{text-align:center; margin-bottom:10px;}
+  header h1{font-size:19px; margin:0 0 2px;}
+  .estado{text-align:center; font-size:12px; font-weight:800; margin-bottom:10px; color:var(--cocoa-soft);}
+  .estado.on{color:var(--ok);}
+  .estado.off{color:var(--danger);}
+  .sonido{display:block; margin:0 auto 16px; border:none; border-radius:999px; background:var(--purple); color:#fff;
+    font:inherit; font-weight:800; font-size:14px; padding:10px 20px;}
+  .sonido.on{background:var(--ok);}
+  .banner{display:none; background:var(--danger); color:#fff; border-radius:16px; padding:14px 16px;
+    margin-bottom:16px; font-weight:800; text-align:center; font-size:15px;}
+  .banner.show{display:block; animation:pulse 1s infinite;}
+  @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.6} }
+  h2{font-size:14px; margin:18px 4px 8px; color:var(--cocoa-soft); text-transform:uppercase; letter-spacing:1px;}
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px;}
+  .tile{background:var(--card); border-radius:var(--radius); padding:14px 10px; text-align:center; box-shadow:0 2px 0 var(--line);}
+  .tile .n{font-weight:800; font-size:14px; margin-bottom:6px; min-height:34px; display:flex; align-items:center; justify-content:center;}
+  .tile .s{font-size:30px; font-weight:800; color:var(--purple);}
+  .tile.rojo .s{color:var(--danger);}
+  .tile.amarillo .s{color:var(--warn);}
+  .tile .m{font-size:11px; color:var(--cocoa-soft); font-weight:700; margin-top:4px;}
+  .vacio{color:var(--cocoa-soft); text-align:center; padding:24px 8px; font-size:14px;}
+  .config{max-width:480px; margin:60px auto; text-align:center; background:#fff; border-radius:22px; padding:28px; box-shadow:0 2px 0 var(--line);}
+  .config .ic{font-size:40px;}
+</style>
+</head>
+<body>
+
+<div id="configAviso" class="config" style="display:none">
+  <div class="ic">⚙️</div>
+  <h3>Falta configurar Firebase</h3>
+  <p style="color:var(--cocoa-soft); font-size:14px">Pega el mismo <code>FIREBASE_CONFIG</code> que usaste en la app principal, dentro de este archivo (<code>app/produccion.html</code>).</p>
+</div>
+
+<div id="app" style="display:none">
+  <header><h1>🍰 Producción en vivo</h1></header>
+  <div class="estado" id="estado">Conectando…</div>
+  <button class="sonido" id="btnSonido" onclick="activarSonido()">🔔 Activar alerta de sonido</button>
+  <div class="banner" id="banner"></div>
+  <div id="secciones"><div class="vacio">Cargando inventario…</div></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAqVskewBiki0TJFgXcLIwIQPHbwCnrzgk",
+  authDomain: "yeryscake-pos.firebaseapp.com",
+  projectId: "yeryscake-pos",
+  storageBucket: "yeryscake-pos.firebasestorage.app",
+  messagingSenderId: "977596164835",
+  appId: "1:977596164835:web:c18eb74d0c41827c0a73d6"
+};
+
+const $ = id => document.getElementById(id);
+let audioCtx = null;
+function activarSonido(){
+  try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+  const b = $('btnSonido');
+  b.textContent = '🔔 Sonido activado'; b.classList.add('on');
+}
+function beep(){
+  if(!audioCtx) return;
+  try{
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    o.frequency.value = 880; o.type = 'sine';
+    g.gain.setValueAtTime(0.35, audioCtx.currentTime);
+    o.start(); o.stop(audioCtx.currentTime + 0.4);
+  }catch(e){}
+}
+
+function nivelDe(f){
+  const m = f.min==null?5:f.min;
+  const aviso = m + Math.max(2, Math.ceil(m*0.5));
+  if(f.stock <= m) return 'rojo';
+  if(f.stock <= aviso) return 'amarillo';
+  return null;
+}
+
+if(FIREBASE_CONFIG.apiKey === 'PEGAR_AQUI'){
+  $('configAviso').style.display = '';
+} else {
+  $('app').style.display = '';
+  firebase.initializeApp(FIREBASE_CONFIG);
+  const db = firebase.firestore();
+  let previosRojos = new Set();
+
+  db.collection('catalog').doc('main').onSnapshot(doc => {
+    $('estado').textContent = '🟢 En vivo — actualizado ' + new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
+    $('estado').className = 'estado on';
+    const data = doc.data();
+    const items = (data && data.items) || [];
+    const rel = items.filter(f => f.track && (f.cat==='cups' || f.cat==='cakes'));
+
+    const rojosAhora = new Set(rel.filter(f=>nivelDe(f)==='rojo').map(f=>f.id));
+    const nuevosRojos = [...rojosAhora].filter(id => !previosRojos.has(id));
+    if(nuevosRojos.length) beep();
+    previosRojos = rojosAhora;
+
+    const rojosItems = rel.filter(f=>rojosAhora.has(f.id));
+    if(rojosItems.length){
+      $('banner').className = 'banner show';
+      $('banner').textContent = '⚠️ Reponer ya: ' + rojosItems.map(f=>f.name+' ('+f.stock+')').join(' · ');
+    } else {
+      $('banner').className = 'banner';
+    }
+
+    const grupos = [
+      ['🍨 Bolocups', rel.filter(f=>/^Bolocup/i.test(f.name))],
+      ['🍰 Cheesecakes y Glas Kibra', rel.filter(f=>/^(Cheesecake|Glas Kibra)/i.test(f.name))],
+      ['🍓 Fresas con crema', rel.filter(f=>/^Fresas con Crema/i.test(f.name))],
+      ['🍰 Slices', rel.filter(f=>/^Slice/i.test(f.name))],
+      ['🎂 Tortas', rel.filter(f=>/^(Carrot Cake|Vainilla Cake)$/i.test(f.name))],
+    ];
+    const yaAgrupados = new Set(grupos.flatMap(([,list])=>list.map(f=>f.id)));
+    grupos.push(['📦 Otros', rel.filter(f=>!yaAgrupados.has(f.id))]);
+    $('secciones').innerHTML = grupos.filter(([,list])=>list.length).map(([titulo,list])=>`
+      <h2>${titulo}</h2>
+      <div class="grid">
+        ${list.sort((a,b)=>a.name.localeCompare(b.name,'es')).map(f=>`
+          <div class="tile ${nivelDe(f)||''}">
+            <div class="n">${f.name}</div>
+            <div class="s">${f.stock}</div>
+            <div class="m">mínimo ${f.min==null?5:f.min}</div>
+          </div>`).join('')}
+      </div>`).join('') || '<div class="vacio">Sin artículos configurados todavía</div>';
+  }, err => {
+    $('estado').textContent = '🔴 Sin conexión con la nube';
+    $('estado').className = 'estado off';
+  });
+}
+</script>
+</body>
+</html>

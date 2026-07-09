@@ -311,7 +311,8 @@
     <div class="form" style="margin-bottom:14px">
       <label style="font-weight:800">Día:</label>
       <input type="date" id="vFecha" onchange="render()">
-      <button class="btn purple" onclick="verCierre()">🧾 Cierre del día</button>
+      <button class="btn purple" onclick="verCierreResumen()">🧾 Cierre resumido</button>
+      <button class="btn" style="background:var(--purple)" onclick="verCierreDetalle()">📋 Cierre detallado</button>
       <button class="btn" style="background:var(--danger)" onclick="abrirGasto()">💸 Registrar gasto</button>
     </div>
     <div class="stats" id="vStats"></div>
@@ -563,7 +564,7 @@ function it(name, price, cat, track, stock, color){ return {id:uid(), name, pric
 function seed(){
   return {
     codes:{sup:'1234', adm:'2580'},
-    priceV:8,
+    priceV:10,
     waDest:[
       {num:'5997804048', name:'Erica', cats:'all'},
       {num:'5997962511', name:'Dahiana', cats:'all'},
@@ -603,7 +604,7 @@ function seed(){
       it('Bolocup 3 Leches',7.00,'cups',1,10),
       it('Fresacake',12.00,'cups',0,0), it('Fresacake Grande',16.50,'cups',0,0),
       it('Chocofresas',12.00,'cups',0,0), it('Chocofresas Grande',16.50,'cups',0,0),
-      it('Fresas con Crema 9oz',10.00,'cups',0,0), it('Fresas con Crema 12oz',15.00,'cups',0,0),
+      it('Fresas con Crema 9oz',10.00,'cups',1,0), it('Fresas con Crema 12oz',15.00,'cups',1,0),
       it('Mango con Crema 9oz',10.00,'cups',0,0), it('Mango con Crema 12oz',12.00,'cups',0,0),
       // WAFFLES, HELADOS & ANTOJITOS
       it('Waffle Frutos Rojos',14.00,'waffles',0,0), it('Waffle Mango',14.00,'waffles',0,0),
@@ -617,10 +618,10 @@ function seed(){
       it('Galletas Chocochips',2.00,'waffles',0,0), it('Mango Preparado',3.50,'waffles',0,0),
       it('Nucita',1.00,'waffles',0,0),
       // CAKES, POSTRES & TORTAS
-      it('Slice Chocolate',8.00,'cakes',0,0), it('Slice Napolitana',8.00,'cakes',0,0),
-      it('Slice Quesillo',7.00,'cakes',0,0), it('Slice Chocoquesillo',8.00,'cakes',0,0),
-      it('Slice Beso de Angel',8.00,'cakes',0,0), it('Slice Uva',8.00,'cakes',0,0),
-      it('Carrot Cake',4.00,'cakes',0,0), it('Vainilla Cake',4.00,'cakes',0,0),
+      it('Slice Chocolate',8.00,'cakes',1,0), it('Slice Napolitana',8.00,'cakes',1,0),
+      it('Slice Quesillo',7.00,'cakes',1,0), it('Slice Chocoquesillo',8.00,'cakes',1,0),
+      it('Slice Beso de Angel',8.00,'cakes',1,0), it('Slice Uva',8.00,'cakes',1,0),
+      it('Carrot Cake',4.00,'cakes',1,0), it('Vainilla Cake',4.00,'cakes',1,0),
       it('Arroz con Leche',6.00,'cakes',0,0),
       it('Minicake (4-5 pers)',25.00,'cakes',0,0), it('Torta 10-12 pers',40.00,'cakes',0,0),
       it('Torta 18-20 pers',75.00,'cakes',0,0),
@@ -759,6 +760,46 @@ function migrar(){
     const PC = {'Café Negro':2.5, 'Hot Chocolate':4};
     S.items.forEach(f=>{ if(PC[f.name]!=null) f.price = PC[f.name]; });
     S.priceV = 8;
+  }
+  if((S.priceV||1) < 9){
+    mchanged = true;
+    // Activa control de inventario para los postres que se van a monitorear
+    // en vivo desde la tablet de producción (ghost kitchen). El conteo real
+    // hay que ingresarlo una vez a mano en Admin/Inventario: arranca en 0.
+    const nuevosTrack = ['Fresas con Crema 9oz','Fresas con Crema 12oz','Slice Chocolate','Slice Napolitana',
+      'Slice Quesillo','Slice Chocoquesillo','Slice Beso de Angel','Slice Uva','Carrot Cake','Vainilla Cake'];
+    S.items.forEach(f=>{
+      if(nuevosTrack.includes(f.name) && !f.track){ f.track = true; if(f.min==null) f.min = 3; if(f.stock==null) f.stock = 0; }
+    });
+    S.priceV = 9;
+  }
+  if((S.priceV||1) < 10){
+    mchanged = true;
+    // Conteo real de stock (recuento hecho por Said el 2026-07-08) para
+    // arrancar el panel de producción en vivo con números correctos.
+    const conteoInicial = {
+      'Bolocup 3 Leches': 8,
+      'Bolocup Chocolate': 10,
+      'Glas Kibra': 8,
+      'Cheesecake Oreo': 11,
+      'Cheesecake Fresa': 6,
+      'Cheesecake Lotus': 5,
+      'Cheesecake Maracuyá': 12,
+      'Slice Chocolate': 12,
+      'Slice Chocoquesillo': 19,
+      'Slice Quesillo': 14,
+      'Slice Beso de Angel': 12,
+      'Slice Napolitana': 1,
+      'Slice Uva': 6,
+      'Carrot Cake': 11,
+      'Vainilla Cake': 10,
+      'Fresas con Crema 9oz': 20,
+      'Fresas con Crema 12oz': 20,
+    };
+    S.items.forEach(f=>{
+      if(conteoInicial[f.name]!=null){ f.track = true; if(f.min==null) f.min = 3; f.stock = conteoInicial[f.name]; }
+    });
+    S.priceV = 10;
   }
   return mchanged;
 }
@@ -1622,14 +1663,13 @@ function renderVentas(){
       </div>`).join('');
   }
 }
-function verCierre(){
-  const day = $('vFecha').value || hoyISO();
+function cierreHTML(day, detalle){
   const d = datosDia(day);
   const filas = Object.entries(d.porItem).sort((a,b)=>b[1].qty-a[1].qty)
     .map(([n,x])=>`<tr><td>${n}</td><td>${x.qty}</td><td>${fmt(x.monto)}</td></tr>`).join('');
   const gastosFilas = d.gastosDia.map(g=>`<tr><td>${g.desc}</td><td>${g.method==='cash'?'Efectivo':'Tarjeta'}</td><td>-${fmt(g.monto)}</td></tr>`).join('');
-  const html = `
-    <h3 style="margin:0">🧾 Cierre del día — Yery'sCake Bonaire</h3>
+  return `
+    <h3 style="margin:0">🧾 Cierre del día ${detalle?'— Detallado':'— Resumen'} — Yery'sCake Bonaire</h3>
     <p style="margin:4px 0 12px; color:#777; font-weight:700">${day}</p>
     <table class="cierre-tabla">
       <tr><th>Resumen</th><th></th><th></th></tr>
@@ -1649,6 +1689,7 @@ function verCierre(){
       <tr><td>Unidades salidas del almacén</td><td></td><td>${d.units}</td></tr>
       <tr><td>— de esas, fiadas (sin cobrar aún)</td><td></td><td>${d.unitsFiado}</td></tr>
     </table>
+    ${detalle ? `
     <table class="cierre-tabla">
       <tr><th>Artículo (incluye mercancía fiada)</th><th>Cant.</th><th>Valor</th></tr>
       ${filas || '<tr><td colspan="3">Sin ventas</td></tr>'}
@@ -1657,11 +1698,17 @@ function verCierre(){
     <table class="cierre-tabla">
       <tr><th>Gastos / compras del día</th><th>Método</th><th>Monto</th></tr>
       ${gastosFilas}
-    </table>` : ''}`;
+    </table>` : ''}` : ''}`;
+}
+function mostrarCierre(detalle){
+  const day = $('vFecha').value || hoyISO();
+  const html = cierreHTML(day, detalle);
   $('cierreBody').innerHTML = html;
   $('printArea').innerHTML = html;
   $('cierreBg').classList.add('open');
 }
+function verCierreResumen(){ mostrarCierre(false); }
+function verCierreDetalle(){ mostrarCierre(true); }
 
 load();
 if('serviceWorker' in navigator){
