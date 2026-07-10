@@ -14,32 +14,32 @@
     --radius:18px;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  html,body{margin:0; padding:0;}
+  html,body{margin:0; padding:0; overflow:hidden; height:100%;}
   body{
     font-family: ui-rounded, "SF Pro Rounded", -apple-system, "Segoe UI", sans-serif;
-    background:var(--bgpink); color:var(--cocoa); padding:16px; padding-bottom:60px;
+    background:var(--bgpink); color:var(--cocoa); padding:10px;
     -webkit-user-select:none; user-select:none;
   }
-  header{text-align:center; margin-bottom:10px;}
-  header h1{font-size:19px; margin:0 0 2px;}
-  .estado{text-align:center; font-size:12px; font-weight:800; margin-bottom:10px; color:var(--cocoa-soft);}
+  .topbar{display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; margin-bottom:6px;}
+  .topbar h1{font-size:17px; margin:0;}
+  .estado{font-size:11px; font-weight:800; color:var(--cocoa-soft);}
   .estado.on{color:var(--ok);}
   .estado.off{color:var(--danger);}
-  .sonido{display:block; margin:0 auto 16px; border:none; border-radius:999px; background:var(--purple); color:#fff;
-    font:inherit; font-weight:800; font-size:14px; padding:10px 20px;}
+  .sonido{border:none; border-radius:999px; background:var(--purple); color:#fff;
+    font:inherit; font-weight:800; font-size:12px; padding:7px 14px;}
   .sonido.on{background:var(--ok);}
-  .banner{display:none; background:var(--danger); color:#fff; border-radius:16px; padding:14px 16px;
-    margin-bottom:16px; font-weight:800; text-align:center; font-size:15px;}
+  .banner{display:none; background:var(--danger); color:#fff; border-radius:12px; padding:8px 12px;
+    margin-bottom:6px; font-weight:800; text-align:center; font-size:14px;}
   .banner.show{display:block; animation:pulse 1s infinite;}
   @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.6} }
-  h2{font-size:14px; margin:18px 4px 8px; color:var(--cocoa-soft); text-transform:uppercase; letter-spacing:1px;}
-  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px;}
-  .tile{background:var(--card); border-radius:var(--radius); padding:14px 10px; text-align:center; box-shadow:0 2px 0 var(--line);}
-  .tile .n{font-weight:800; font-size:14px; margin-bottom:6px; min-height:34px; display:flex; align-items:center; justify-content:center;}
-  .tile .s{font-size:30px; font-weight:800; color:var(--purple);}
+  h2{font-size:11px; margin:8px 4px 4px; color:var(--cocoa-soft); text-transform:uppercase; letter-spacing:1px;}
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(108px,1fr)); gap:6px;}
+  .tile{background:var(--card); border-radius:12px; padding:6px 6px 7px; text-align:center; box-shadow:0 2px 0 var(--line);}
+  .tile .n{font-weight:800; font-size:11.5px; line-height:1.15; margin-bottom:2px; min-height:27px; display:flex; align-items:center; justify-content:center;}
+  .tile .s{font-size:22px; font-weight:800; color:var(--purple); line-height:1.1;}
   .tile.rojo .s{color:var(--danger);}
   .tile.amarillo .s{color:var(--warn);}
-  .tile .m{font-size:11px; color:var(--cocoa-soft); font-weight:700; margin-top:4px;}
+  .tile .m{font-size:9.5px; color:var(--cocoa-soft); font-weight:700; margin-top:1px;}
   .vacio{color:var(--cocoa-soft); text-align:center; padding:24px 8px; font-size:14px;}
   .config{max-width:480px; margin:60px auto; text-align:center; background:#fff; border-radius:22px; padding:28px; box-shadow:0 2px 0 var(--line);}
   .config .ic{font-size:40px;}
@@ -54,9 +54,11 @@
 </div>
 
 <div id="app" style="display:none">
-  <header><h1>🍰 Producción en vivo</h1></header>
-  <div class="estado" id="estado">Conectando…</div>
-  <button class="sonido" id="btnSonido" onclick="activarSonido()">🔔 Activar alerta de sonido</button>
+  <div class="topbar">
+    <h1>🍰 Producción en vivo</h1>
+    <div class="estado" id="estado">Conectando…</div>
+    <button class="sonido" id="btnSonido" onclick="activarSonido()">🔔 Activar sonido</button>
+  </div>
   <div class="banner" id="banner"></div>
   <div id="secciones"><div class="vacio">Cargando inventario…</div></div>
 </div>
@@ -98,6 +100,19 @@ function nivelDe(f){
   if(f.stock <= aviso) return 'amarillo';
   return null;
 }
+
+/* Encoge la página lo justo para que TODO quepa en pantalla sin deslizar. */
+function ajustarPantalla(){
+  const app = $('app');
+  app.style.zoom = 1;
+  requestAnimationFrame(()=>{
+    const disponible = window.innerHeight - 20; // padding del body
+    const contenido = app.scrollHeight;
+    if(contenido > disponible) app.style.zoom = Math.max(0.4, disponible / contenido);
+  });
+}
+window.addEventListener('resize', ajustarPantalla);
+window.addEventListener('orientationchange', ()=>setTimeout(ajustarPantalla, 300));
 
 if(FIREBASE_CONFIG.apiKey === 'PEGAR_AQUI'){
   $('configAviso').style.display = '';
@@ -146,6 +161,7 @@ if(FIREBASE_CONFIG.apiKey === 'PEGAR_AQUI'){
             <div class="m">mínimo ${f.min==null?5:f.min}</div>
           </div>`).join('')}
       </div>`).join('') || '<div class="vacio">Sin artículos configurados todavía</div>';
+    ajustarPantalla();
   }, err => {
     $('estado').textContent = '🔴 Sin conexión con la nube';
     $('estado').className = 'estado off';
