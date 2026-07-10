@@ -19,7 +19,9 @@
     font-family: ui-rounded, "SF Pro Rounded", -apple-system, "Segoe UI", sans-serif;
     background:var(--bgpink); color:var(--cocoa); padding:10px;
     -webkit-user-select:none; user-select:none;
+    display:flex; align-items:center; justify-content:center;
   }
+  #app{width:100%; max-width:1100px; text-align:center;}
   .topbar{display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; margin-bottom:6px;}
   .topbar h1{font-size:17px; margin:0;}
   .estado{font-size:11px; font-weight:800; color:var(--cocoa-soft);}
@@ -32,14 +34,13 @@
     margin-bottom:6px; font-weight:800; text-align:center; font-size:14px;}
   .banner.show{display:block; animation:pulse 1s infinite;}
   @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.6} }
-  h2{font-size:11px; margin:8px 4px 4px; color:var(--cocoa-soft); text-transform:uppercase; letter-spacing:1px;}
-  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(108px,1fr)); gap:6px;}
-  .tile{background:var(--card); border-radius:12px; padding:6px 6px 7px; text-align:center; box-shadow:0 2px 0 var(--line);}
-  .tile .n{font-weight:800; font-size:11.5px; line-height:1.15; margin-bottom:2px; min-height:27px; display:flex; align-items:center; justify-content:center;}
-  .tile .s{font-size:22px; font-weight:800; color:var(--purple); line-height:1.1;}
+  h2{font-size:13px; margin:12px 4px 6px; color:var(--cocoa-soft); text-transform:uppercase; letter-spacing:1px; text-align:center;}
+  .grid{display:flex; flex-wrap:wrap; justify-content:center; gap:10px;}
+  .tile{background:var(--card); border-radius:16px; padding:12px 8px; width:158px; text-align:center; box-shadow:0 2px 0 var(--line);}
+  .tile .n{font-weight:800; font-size:15px; line-height:1.15; margin-bottom:4px; min-height:35px; display:flex; align-items:center; justify-content:center;}
+  .tile .s{font-size:38px; font-weight:800; color:var(--purple); line-height:1.05;}
   .tile.rojo .s{color:var(--danger);}
   .tile.amarillo .s{color:var(--warn);}
-  .tile .m{font-size:9.5px; color:var(--cocoa-soft); font-weight:700; margin-top:1px;}
   .vacio{color:var(--cocoa-soft); text-align:center; padding:24px 8px; font-size:14px;}
   .config{max-width:480px; margin:60px auto; text-align:center; background:#fff; border-radius:22px; padding:28px; box-shadow:0 2px 0 var(--line);}
   .config .ic{font-size:40px;}
@@ -158,7 +159,6 @@ if(FIREBASE_CONFIG.apiKey === 'PEGAR_AQUI'){
           <div class="tile ${nivelDe(f)||''}">
             <div class="n">${f.name}</div>
             <div class="s">${f.stock}</div>
-            <div class="m">mínimo ${f.min==null?5:f.min}</div>
           </div>`).join('')}
       </div>`).join('') || '<div class="vacio">Sin artículos configurados todavía</div>';
     ajustarPantalla();
