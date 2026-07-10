@@ -500,7 +500,7 @@ const DEFAULT_IMGS = {"Mango": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABA
     'Ensalada de Frutas Completa':'Ensalada de Frutas',
     'Ensalada Frutas Plain G':'Ensalada de Frutas', 'Ensalada Frutas Plain P':'Ensalada de Frutas',
     'Waffle Solo Fruta (miel)':'Waffle Solo Fruta', 'Cucurucho':'Cucurucho',
-    '1 Bola en Cono':'Cucurucho'
+    '1 Bola en Cono':'Cucurucho', 'Tropical/Tizana':'Milkshake Tropical'
   };
   for(const k in A){ if(!DEFAULT_IMGS[k] && DEFAULT_IMGS[A[k]]) DEFAULT_IMGS[k] = DEFAULT_IMGS[A[k]]; }
 })();
@@ -564,7 +564,7 @@ function it(name, price, cat, track, stock, color, min){ return {id:uid(), name,
 function seed(){
   return {
     codes:{sup:'1234', adm:'2580'},
-    priceV:10,
+    priceV:11,
     waDest:[
       {num:'5997804048', name:'Erica', cats:'all'},
       {num:'5997962511', name:'Dahiana', cats:'all'},
@@ -654,7 +654,9 @@ function seed(){
       it('Batido Banano',7.00,'batidos',0,0), it('Batido Mango',7.00,'batidos',0,0),
       it('Milkshake Oreo',7.00,'batidos',0,0), it('Milkshake Maracuyá',7.00,'batidos',0,0),
       it('Milkshake Chocolate',7.00,'batidos',0,0), it('Iced Coffee',7.00,'batidos',0,0),
-      it('Milkshake Tropical',7.00,'batidos',0,0), it('Milkshake vainilla',7.00,'batidos',0,0),
+      it('Tropical/Tizana',7.00,'batidos',0,0), it('Milkshake vainilla',7.00,'batidos',0,0),
+      it('Milkshake Fresa',7.00,'batidos',0,0), it('Milkshake Caramelo',7.00,'batidos',0,0),
+      it('Milkshake Cherry',7.00,'batidos',0,0),
       it('Mix Red Power',8.00,'batidos',1,0,null,8), it('Mix Green Detox',8.00,'batidos',1,0,null,8),
       it('Mix Pink Balance',8.00,'batidos',1,0,null,8), it('Mix Orange Glow',8.00,'batidos',1,0,null,8),
       it('Mix Yellow Energy',8.00,'batidos',1,0,null,8),
@@ -815,6 +817,15 @@ function migrar(){
       if(conteoInicial[f.name]!=null){ f.track = true; if(f.min==null) f.min = 3; f.stock = conteoInicial[f.name]; }
     });
     S.priceV = 10;
+  }
+  if((S.priceV||1) < 11){
+    mchanged = true;
+    const mt = S.items.find(f=>f.name==='Milkshake Tropical');
+    if(mt) mt.name = 'Tropical/Tizana';
+    ['Milkshake Fresa','Milkshake Caramelo','Milkshake Cherry'].forEach(n=>{
+      if(!S.items.some(f=>f.name===n)) S.items.push(it(n,7.00,'batidos',0,0));
+    });
+    S.priceV = 11;
   }
   return mchanged;
 }
