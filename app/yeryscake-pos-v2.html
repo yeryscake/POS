@@ -559,7 +559,7 @@ const fmt = n => '$' + n.toFixed(2);
 const hoyISO = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 
-function it(name, price, cat, track, stock, color){ return {id:uid(), name, price, cat, track:!!track, stock:stock||0, min:5, color:color||CATS.find(c=>c.id===cat).color}; }
+function it(name, price, cat, track, stock, color, min){ return {id:uid(), name, price, cat, track:!!track, stock:stock||0, min: min==null?5:min, color:color||CATS.find(c=>c.id===cat).color}; }
 
 function seed(){
   return {
@@ -586,6 +586,15 @@ function seed(){
       {id:uid(),name:'Vaso con hielo',price:0.50},
       {id:uid(),name:'Cereal',price:1},
       {id:uid(),name:'Galletas Oreo',price:1},
+      {id:uid(),name:'Queso',price:1},
+      {id:uid(),name:'Helado',price:1.5},
+      {id:uid(),name:'Mango',price:1},
+      {id:uid(),name:'Fresa',price:1},
+      {id:uid(),name:'Banano',price:1},
+      {id:uid(),name:'Patilla',price:1},
+      {id:uid(),name:'Melon',price:1},
+      {id:uid(),name:'Papaya',price:1},
+      {id:uid(),name:'Uva',price:1},
     ],
     items:[
       // PALETAS (con inventario) — todas $3
@@ -617,12 +626,13 @@ function seed(){
       it('Minidonuts',6.00,'waffles',0,0), it('Raspao',4.00,'waffles',0,0),
       it('Galletas Chocochips',2.00,'waffles',0,0), it('Mango Preparado',3.50,'waffles',0,0),
       it('Nucita',1.00,'waffles',0,0),
+      it('Raspao buki pret',2.50,'waffles',0,0), it('Banana split buki pret',6.50,'waffles',0,0),
       // CAKES, POSTRES & TORTAS
       it('Slice Chocolate',8.00,'cakes',1,0), it('Slice Napolitana',8.00,'cakes',1,0),
       it('Slice Quesillo',7.00,'cakes',1,0), it('Slice Chocoquesillo',8.00,'cakes',1,0),
       it('Slice Beso de Angel',8.00,'cakes',1,0), it('Slice Uva',8.00,'cakes',1,0),
       it('Carrot Cake',4.00,'cakes',1,0), it('Vainilla Cake',4.00,'cakes',1,0),
-      it('Arroz con Leche',6.00,'cakes',0,0),
+      it('Arroz con Leche',6.00,'cakes',1,0),
       it('Minicake (4-5 pers)',25.00,'cakes',0,0), it('Torta 10-12 pers',40.00,'cakes',0,0),
       it('Torta 18-20 pers',75.00,'cakes',0,0),
       // DESAYUNOS
@@ -630,21 +640,24 @@ function seed(){
       it('Pandebono',2.00,'desayunos',0,0), it('Palito de Salchicha',2.25,'desayunos',0,0),
       it('Palito de Queso',2.25,'desayunos',0,0), it('Pastechi Queso',2.75,'desayunos',0,0),
       it('Pastechi Jamón y Queso',2.75,'desayunos',0,0), it('Pastechi Hawaiano',2.75,'desayunos',0,0),
-      it('Tosty Queso',3.50,'desayunos',0,0), it('Tosty Jamón y Queso',4.00,'desayunos',0,0),
+      it('Tosty Queso',3.00,'desayunos',0,0), it('Tosty Jamón y Queso',4.00,'desayunos',0,0),
       it('Pan Ensalada Pollo',6.00,'desayunos',0,0), it('Pan Ensalada Huevo',6.00,'desayunos',0,0),
       it('Pan Ensalada Tuna',6.00,'desayunos',0,0), it('Baki de Ensalada',5.00,'desayunos',0,0),
       it('Ensalada de Frutas Completa',17.00,'desayunos',0,0),
       it('Ensalada Frutas Plain G',11.00,'desayunos',0,0), it('Ensalada Frutas Plain P',8.00,'desayunos',0,0),
+      it('Pan kipachi tuna',5.00,'desayunos',0,0), it('Pan kipachi huevo',5.00,'desayunos',0,0),
+      it('Pan kipachi pollo',5.00,'desayunos',0,0),
+      it('Kefir',6.00,'desayunos',1,0), it('Kefir botella 1L',10.00,'desayunos',0,0),
       // BATIDOS & SHAKES
       it('Batido Papaya',7.00,'batidos',0,0), it('Batido Sandía',7.00,'batidos',0,0),
       it('Batido Melón',7.00,'batidos',0,0), it('Batido Fresa',7.00,'batidos',0,0),
       it('Batido Banano',7.00,'batidos',0,0), it('Batido Mango',7.00,'batidos',0,0),
       it('Milkshake Oreo',7.00,'batidos',0,0), it('Milkshake Maracuyá',7.00,'batidos',0,0),
       it('Milkshake Chocolate',7.00,'batidos',0,0), it('Iced Coffee',7.00,'batidos',0,0),
-      it('Milkshake Tropical',7.00,'batidos',0,0),
-      it('Mix Red Power',8.00,'batidos',0,0), it('Mix Green Detox',8.00,'batidos',0,0),
-      it('Mix Pink Balance',8.00,'batidos',0,0), it('Mix Orange Glow',8.00,'batidos',0,0),
-      it('Mix Yellow Energy',8.00,'batidos',0,0),
+      it('Milkshake Tropical',7.00,'batidos',0,0), it('Milkshake vainilla',7.00,'batidos',0,0),
+      it('Mix Red Power',8.00,'batidos',1,0,null,8), it('Mix Green Detox',8.00,'batidos',1,0,null,8),
+      it('Mix Pink Balance',8.00,'batidos',1,0,null,8), it('Mix Orange Glow',8.00,'batidos',1,0,null,8),
+      it('Mix Yellow Energy',8.00,'batidos',1,0,null,8),
       // CAFÉ
       it('Café Negro',2.50,'cafe',0,0), it('Capuchino',3.00,'cafe',0,0),
       it('Latte',3.50,'cafe',0,0), it('Hot Chocolate',4.00,'cafe',0,0),
@@ -653,12 +666,14 @@ function seed(){
       it('Jugo Fresa',4.00,'jugos',1,10), it('Jugo Tamarindo',4.00,'jugos',1,10),
       it('Jugo Passion Fruit',4.00,'jugos',1,10),
       // BEBIDAS (con inventario)
-      it('Postobón Manzana',2.00,'bebidas',1,24), it('Postobón Uva',2.00,'bebidas',1,24),
-      it('Colombiana',2.00,'bebidas',1,24), it('Red Bull',3.50,'bebidas',1,24),
-      it('Coca-Cola Lata',2.00,'bebidas',1,24), it('Coca-Cola Zero Lata',2.00,'bebidas',1,24),
-      it('Fuse Tea Peach',2.50,'bebidas',1,24), it('Fuse Tea Lemon',2.50,'bebidas',1,24),
-      it('Sprite Lata',2.00,'bebidas',1,24), it('Capri-Sun',1.50,'bebidas',1,24),
-      it('Agua',1.50,'bebidas',1,24),
+      it('Postobón Manzana',2.50,'bebidas',1,24,null,15), it('Postobón Uva',2.50,'bebidas',1,24,null,15),
+      it('Colombiana',2.50,'bebidas',1,24,null,15), it('Red Bull',2.50,'bebidas',1,24,null,12),
+      it('Coca-Cola Lata',2.50,'bebidas',1,24,null,12), it('Coca-Cola Zero Lata',2.50,'bebidas',1,24,null,12),
+      it('Fuse Tea Peach',2.50,'bebidas',1,24,null,12), it('Fuse Tea Lemon',2.50,'bebidas',1,24,null,12),
+      it('Sprite Lata',2.50,'bebidas',1,24,null,12), it('Capri-Sun',1.00,'bebidas',1,24,null,40),
+      it('Agua',2.00,'bebidas',1,24,null,40),
+      it('Pony malta',2.50,'bebidas',1,24,null,0), it('Vive 100',3.00,'bebidas',1,24,null,0),
+      it('Maltin',2.50,'bebidas',1,24,null,24), it('TuttiFrutti',2.50,'bebidas',1,24,null,0),
     ],
     sales:[],
     fiados:[],
