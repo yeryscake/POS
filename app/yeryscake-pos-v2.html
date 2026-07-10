@@ -1154,10 +1154,11 @@ async function confirmarCobro(){
     if(!fiadoNombre){ toast('Escribe el nombre de la persona'); return; }
   }
   // descontar stock (también en fiado)
+  const stockPrevio = {};
   for(const itk of ticket){
     if(itk.track){
       const f = S.items.find(x=>x.id===itk.itemId);
-      if(f) f.stock = Math.max(0, f.stock - itk.qty);
+      if(f){ if(stockPrevio[f.id]==null) stockPrevio[f.id] = f.stock; f.stock = Math.max(0, f.stock - itk.qty); }
     }
   }
   const registro = {
@@ -1177,7 +1178,15 @@ async function confirmarCobro(){
   await save(); render();
   toast(payMetodo==='fiado' ? '🤝 Fiado registrado: '+fiadoNombre+' — '+fmt(total)
       : payMetodo==='cash' && change>0 ? '✅ Cobrado. Devuelta: '+fmt(change) : '✅ Venta cobrada: '+fmt(total));
-  const lows = itemsBajos().filter(x=>idsVendidos.has(x.f.id));
+  // Solo alertar cuando esta venta CRUZA un umbral (llegó al mínimo o llegó
+  // a 1), no en cada venta posterior — para no ser invasivos.
+  const lows = itemsBajos().filter(x=>{
+    if(!idsVendidos.has(x.f.id)) return false;
+    const prev = stockPrevio[x.f.id];
+    if(prev==null) return false;
+    const m = x.f.min==null ? 5 : x.f.min;
+    return (prev > m && x.f.stock <= m) || (prev > 1 && x.f.stock <= 1);
+  });
   if(lows.length) setTimeout(()=>mostrarAlertas(lows), 600);
 }
 
