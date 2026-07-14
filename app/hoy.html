@@ -59,6 +59,7 @@
     <div class="stat wide"><b id="sTotal">$0.00</b><span>Total del día</span></div>
     <div class="stat"><b id="sCash">$0.00</b><span>💵 Efectivo cobrado</span></div>
     <div class="stat"><b id="sCard">$0.00</b><span>💳 Tarjeta cobrada</span></div>
+    <div class="stat" id="boxTransfer" style="display:none"><b id="sTransfer">$0.00</b><span>🏦 Transferencias</span></div>
     <div class="stat" id="boxGastos" style="display:none"><b id="sGastos">$0.00</b><span>💸 Gastos/compras</span></div>
     <div class="stat ok" id="boxNeto" style="display:none"><b id="sNeto">$0.00</b><span>💰 Efectivo neto en caja</span></div>
     <div class="stat"><b id="sVentas">0</b><span>Ventas</span></div>
@@ -99,7 +100,8 @@ if(FIREBASE_CONFIG.apiKey === 'PEGAR_AQUI'){
     const gastos = (data && data.gastos) || [];
     const cash = sales.reduce((a,v)=>a+(v.method==='cash'?v.total : v.method==='mixed'?v.cashPart : 0),0);
     const card = sales.reduce((a,v)=>a+(v.method==='card'?v.total : v.method==='mixed'?v.cardPart : 0),0);
-    const total = cash + card;
+    const transfer = sales.reduce((a,v)=>a+(v.method==='transfer'?v.total : 0),0);
+    const total = cash + card + transfer;
     const gastosCash = gastos.filter(g=>g.method==='cash').reduce((s,g)=>s+g.monto,0);
     const gastosCard = gastos.filter(g=>g.method==='card').reduce((s,g)=>s+g.monto,0);
     const gastosTotal = gastosCash + gastosCard;
@@ -109,6 +111,8 @@ if(FIREBASE_CONFIG.apiKey === 'PEGAR_AQUI'){
     $('sTotal').textContent = fmt(total);
     $('sCash').textContent = fmt(cash);
     $('sCard').textContent = fmt(card);
+    if(transfer > 0){ $('boxTransfer').style.display = ''; $('sTransfer').textContent = fmt(transfer); }
+    else $('boxTransfer').style.display = 'none';
     $('sVentas').textContent = sales.length;
     $('sUnidades').textContent = units;
     if(gastosTotal > 0){
@@ -120,7 +124,7 @@ if(FIREBASE_CONFIG.apiKey === 'PEGAR_AQUI'){
     }
     $('lista').innerHTML = sales.length ? sales.slice().reverse().slice(0,30).map(v=>`
       <div class="sale">
-        <div><b>${v.items.map(i=>i.qty+'× '+i.name).join(', ')}</b><div class="t">${v.time} · ${v.method==='cash'?'💵 Efectivo':v.method==='card'?'💳 Tarjeta':'🔀 Mixto'}</div></div>
+        <div><b>${v.items.map(i=>i.qty+'× '+i.name).join(', ')}</b><div class="t">${v.time} · ${v.method==='cash'?'💵 Efectivo':v.method==='card'?'💳 Tarjeta':v.method==='transfer'?'🏦 Transferencia':'🔀 Mixto'}</div></div>
         <div>${fmt(v.total)}</div>
       </div>`).join('') : '<div class="vacio">Sin ventas todavía</div>';
   }

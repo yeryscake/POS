@@ -161,6 +161,7 @@
   .mtag.cash{background:#E1F5EE; color:var(--ok);}
   .mtag.card{background:#E7F0FF; color:#3568C9;}
   .mtag.mixed{background:#F1E7FF; color:var(--purple);}
+  .mtag.transfer{background:#E3F6F8; color:#0E7C8C;}
 
   /* cierre imprimible */
   #printArea{display:none;}
@@ -358,6 +359,7 @@
     <div class="pay-method">
       <button id="mCash" class="on" onclick="setMetodo('cash')">💵 Efectivo</button>
       <button id="mCard" onclick="setMetodo('card')">💳 Tarjeta</button>
+      <button id="mTransfer" onclick="setMetodo('transfer')">🏦 Transferencia</button>
       <button id="mMixto" onclick="setMetodo('mixed')">🔀 Mixto</button>
       <button id="mFiado" onclick="setMetodo('fiado')">🤝 Fiado</button>
     </div>
@@ -457,6 +459,7 @@
     <div class="pay-method" style="margin-top:12px">
       <button id="amCash" class="on" onclick="setAbonoMetodo('cash')">💵 Efectivo</button>
       <button id="amCard" onclick="setAbonoMetodo('card')">💳 Tarjeta</button>
+      <button id="amTransfer" onclick="setAbonoMetodo('transfer')">🏦 Transferencia</button>
     </div>
     <button class="big purple" onclick="confirmarAbono()">Registrar pago</button>
     <button class="big ghost" onclick="$('abonoBg').classList.remove('open')" style="color:var(--cocoa-soft)">Cancelar</button>
@@ -1262,7 +1265,7 @@ function confirmarEmpleado(){
 function abrirCobro(){
   if(!ticket.length) return;
   payMetodo='cash'; dctoEmpleado=false; dctoNombre='';
-  $('mCash').classList.add('on'); $('mCard').classList.remove('on'); $('mMixto').classList.remove('on'); $('mFiado').classList.remove('on');
+  $('mCash').classList.add('on'); $('mCard').classList.remove('on'); $('mTransfer').classList.remove('on'); $('mMixto').classList.remove('on'); $('mFiado').classList.remove('on');
   $('cashZone').style.display=''; $('fiadoZone').style.display='none'; $('mixedZone').style.display='none';
   $('fiadoNombre').value=''; $('btnConfirmar').textContent='Confirmar venta';
   pintarTotalCobro();
@@ -1275,6 +1278,7 @@ function setMetodo(m){
   payMetodo=m;
   $('mCash').classList.toggle('on',m==='cash');
   $('mCard').classList.toggle('on',m==='card');
+  $('mTransfer').classList.toggle('on',m==='transfer');
   $('mMixto').classList.toggle('on',m==='mixed');
   $('mFiado').classList.toggle('on',m==='fiado');
   $('cashZone').style.display = m==='cash' ? '' : 'none';
@@ -1419,7 +1423,7 @@ function renderFiados(){
 function abrirAbono(id){
   const f = S.fiados.find(x=>x.id===id); if(!f) return;
   abonoFiadoId = id; abonoMetodo = 'cash';
-  $('amCash').classList.add('on'); $('amCard').classList.remove('on');
+  $('amCash').classList.add('on'); $('amCard').classList.remove('on'); $('amTransfer').classList.remove('on');
   $('abonoInfo').textContent = f.name + ' — Saldo pendiente: ' + fmt(saldoDe(f));
   $('abonoMonto').value = saldoDe(f).toFixed(2);
   $('abonoBg').classList.add('open');
@@ -1428,6 +1432,7 @@ function setAbonoMetodo(m){
   abonoMetodo = m;
   $('amCash').classList.toggle('on', m==='cash');
   $('amCard').classList.toggle('on', m==='card');
+  $('amTransfer').classList.toggle('on', m==='transfer');
 }
 async function confirmarAbono(){
   const f = S.fiados.find(x=>x.id===abonoFiadoId); if(!f) return;
@@ -1839,11 +1844,13 @@ function datosDia(day){
   const vs = S.sales.filter(v=>v.day===day);
   const cash = vs.reduce((a,v)=>a+(v.method==='cash'?v.total : v.method==='mixed'?v.cashPart : 0),0);
   const card = vs.reduce((a,v)=>a+(v.method==='card'?v.total : v.method==='mixed'?v.cardPart : 0),0);
+  const transfer = vs.reduce((a,v)=>a+(v.method==='transfer'?v.total : 0),0);
   const abonosDia = [];
   (S.fiados||[]).forEach(f=>(f.abonos||[]).forEach(a=>{ if(a.day===day) abonosDia.push({...a, name:f.name}); }));
   const cashA = abonosDia.filter(a=>a.method==='cash').reduce((s,a)=>s+a.monto,0);
   const cardA = abonosDia.filter(a=>a.method==='card').reduce((s,a)=>s+a.monto,0);
-  const total = cash + card + cashA + cardA;
+  const transferA = abonosDia.filter(a=>a.method==='transfer').reduce((s,a)=>s+a.monto,0);
+  const total = cash + card + transfer + cashA + cardA + transferA;
   const fsDia = (S.fiados||[]).filter(f=>f.day===day);
   const unitsFiado = fsDia.reduce((a,v)=>a+v.units,0);
   const units = vs.reduce((a,v)=>a+v.units,0) + unitsFiado;
@@ -1861,9 +1868,10 @@ function datosDia(day){
   const cashNeto = cash + cashA - gastosCash;
   const cardNeto = card + cardA - gastosCard;
   const dctos = vs.reduce((a,v)=>a+(v.dcto||0),0) + fsDia.reduce((a,v)=>a+(v.dcto||0),0);
-  return {vs, cash, card, cashA, cardA, abonosDia, total, units, unitsFiado, porItem, gastosDia, gastosCash, gastosCard, cashNeto, cardNeto, dctos};
+  const transferTotal = transfer + transferA;
+  return {vs, cash, card, transfer, cashA, cardA, transferA, transferTotal, abonosDia, total, units, unitsFiado, porItem, gastosDia, gastosCash, gastosCard, cashNeto, cardNeto, dctos};
 }
-function metodoLabel(m){ return m==='cash'?'💵 Efectivo' : m==='card'?'💳 Tarjeta' : '🔀 Mixto'; }
+function metodoLabel(m){ return m==='cash'?'💵 Efectivo' : m==='card'?'💳 Tarjeta' : m==='transfer'?'🏦 Transferencia' : '🔀 Mixto'; }
 function renderVentas(){
   const day = $('vFecha').value || hoyISO();
   const d = datosDia(day);
@@ -1872,6 +1880,8 @@ function renderVentas(){
     <div class="stat"><b>${fmt(d.total)}</b><span>Total del día</span></div>
     <div class="stat"><b>${fmt(d.cash + d.cashA)}</b><span>💵 Efectivo cobrado</span></div>
     <div class="stat"><b>${fmt(d.card + d.cardA)}</b><span>💳 Tarjeta cobrada</span></div>
+    ${d.transferTotal>0 ? `
+    <div class="stat"><b>${fmt(d.transferTotal)}</b><span>🏦 Transferencias</span></div>` : ''}
     <div class="stat"><b>${fmt(d.cashA + d.cardA)}</b><span>🤝 Abonos fiados</span></div>
     ${d.gastosDia.length ? `
     <div class="stat" style="color:var(--danger)"><b>-${fmt(d.gastosCash + d.gastosCard)}</b><span>💸 Gastos/compras</span></div>` : ''}
@@ -1918,8 +1928,12 @@ function cierreHTML(day, detalle){
       <tr><th>Resumen</th><th></th><th></th></tr>
       <tr><td>💵 Efectivo (ventas)</td><td></td><td><b>${fmt(d.cash)}</b></td></tr>
       <tr><td>💳 Tarjeta (ventas)</td><td></td><td><b>${fmt(d.card)}</b></td></tr>
+      ${d.transferTotal>0 ? `
+      <tr><td>🏦 Transferencias (ventas)</td><td></td><td><b>${fmt(d.transfer)}</b></td></tr>` : ''}
       <tr><td>🤝 Abonos de fiados (efectivo)</td><td></td><td><b>${fmt(d.cashA)}</b></td></tr>
       <tr><td>🤝 Abonos de fiados (tarjeta)</td><td></td><td><b>${fmt(d.cardA)}</b></td></tr>
+      ${d.transferA>0 ? `
+      <tr><td>🤝 Abonos de fiados (transferencia)</td><td></td><td><b>${fmt(d.transferA)}</b></td></tr>` : ''}
       ${d.dctos>0 ? `
       <tr><td>🧑‍🍳 Descuentos de empleados aplicados</td><td></td><td>-${fmt(d.dctos)}</td></tr>` : ''}
       ${d.gastosDia.length ? `
@@ -1928,6 +1942,8 @@ function cierreHTML(day, detalle){
       <tr><td><b>TOTAL DEL DÍA (ventas)</b></td><td></td><td><b>${fmt(d.total)}</b></td></tr>
       <tr><td><b>💰 DEBE HABER EN CAJA (efectivo)</b><br><span style="font-weight:600;font-size:12px;color:#777">ventas + abonos − gastos, sin contar el fondo fijo</span></td><td></td><td><b>${fmt(d.cashNeto)}</b></td></tr>
       <tr><td><b>💳 DEBE HABER EN TARJETA</b></td><td></td><td><b>${fmt(d.cardNeto)}</b></td></tr>
+      ${d.transferTotal>0 ? `
+      <tr><td><b>🏦 DEBE HABER EN TRANSFERENCIAS</b><br><span style="font-weight:600;font-size:12px;color:#777">verificar en la cuenta bancaria</span></td><td></td><td><b>${fmt(d.transferTotal)}</b></td></tr>` : ''}
       <tr><td>Pendiente por cobrar (todos los fiados)</td><td></td><td>${fmt(S.fiados.reduce((a,f)=>a+saldoDe(f),0))}</td></tr>
       <tr><td>Número de ventas</td><td></td><td>${d.vs.length}</td></tr>
       <tr><td>Unidades salidas del almacén</td><td></td><td>${d.units}</td></tr>
@@ -1957,7 +1973,7 @@ function verCierreDetalle(){ mostrarCierre(true); }
 /* Comprobante de una venta individual (si el cliente lo pide después) */
 function imprimirVenta(id){
   const v = S.sales.find(x=>x.id===id); if(!v) return;
-  const metodo = v.method==='cash' ? '💵 Efectivo' : v.method==='card' ? '💳 Tarjeta' : '🔀 Mixto';
+  const metodo = metodoLabel(v.method);
   const filas = v.items.map(i=>
     `<tr><td>${i.qty}× ${i.name}</td><td></td><td>${fmt(i.qty*i.price)}</td></tr>`).join('');
   const html = `

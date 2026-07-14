@@ -55,9 +55,11 @@ internet; icono ☁️/📴 en el header):
   **Reorganizar fichas**: mantener presionado un producto ~0.5s activa modo
   edición estilo iPhone (tiemblan y se arrastran); "Listo, guardar orden" guarda
   `pos` por artículo dentro de su categoría.
-- **Cobro**: efectivo (devuelta + botones de billetes), tarjeta, **mixto**
-  (efectivo + tarjeta, valida que sumen el total) y fiado. Valida pago
-  insuficiente. Anti doble-toque en todos los botones de confirmación.
+- **Cobro**: efectivo (devuelta + botones de billetes), tarjeta,
+  **transferencia** (🏦, también disponible en abonos de fiados; el cierre
+  muestra "DEBE HABER EN TRANSFERENCIAS" solo si hubo), **mixto** (efectivo +
+  tarjeta, valida que sumen el total) y fiado. Valida pago insuficiente.
+  Anti doble-toque en todos los botones de confirmación.
 - **Descuento empleado −12%**: botón en la hoja de cobro → modal grande pide el
   código personal de 4 dígitos del empleado → mensaje "¡Gracias por tu gran
   trabajo! Disfrútalo, [nombre] ❤️" → la venta sigue con el precio tachado y
@@ -103,8 +105,8 @@ S = {
   toppings: [{id, name, price}],
   items: [{id, name, price, cat, track, stock, min, color, pos}], // pos = orden en la grilla
   sales: [{id, day, time, items:[{name, base, qty, price, itemId|null}], total,
-           units, method:'cash'|'card'|'mixed', paid, change, cashPart, cardPart,
-           dcto, dctoPor}],
+           units, method:'cash'|'card'|'transfer'|'mixed', paid, change,
+           cashPart, cardPart, dcto, dctoPor}],
   fiados: [{id, name, day, time, items, total, units, dcto, abonos:[{id,day,time,monto,method}]}],
   gastos: [{id, day, time, desc, monto, method:'cash'|'card', foto|null}]
 }
