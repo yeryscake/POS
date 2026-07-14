@@ -11,95 +11,121 @@ de Bonaire y el Caribe (nombre comercial nuevo por definir).
 Dueños: Said Vasquez y Erica Agudelo. Idiomas objetivo: Español, Inglés, Papiamentu.
 Moneda: USD.
 
-## Archivo principal
+## Archivos y despliegue
 
-`app/yeryscake-pos-v2.html` — App completa en un solo archivo (HTML + CSS + JS vanilla,
-~730 KB porque lleva 109 fotos de productos embebidas en base64).
-`assets/productos/` — Las mismas 109 fotos como JPG individuales (150×150).
-`app/manifest.webmanifest` + `app/sw.js` + `app/icons/` — PWA instalable y offline.
-`netlify.toml` — publica la carpeta `app/` en Netlify sin configuración manual.
+- `app/yeryscake-pos-v2.html` — App principal completa en un solo archivo
+  (HTML + CSS + JS vanilla, ~780 KB con fotos de productos embebidas en base64).
+- `app/hoy.html` — Panel de solo lectura para el celular de Said: ventas del día
+  en vivo (lee de Firebase). Sin contraseña — no compartir el link públicamente.
+- `app/produccion.html` — Panel de solo lectura para la tablet del ghost kitchen:
+  stock en vivo de postres (bolocups, cheesecakes, fresas con crema, slices,
+  tortas, arroz con leche), banner rojo + sonido al llegar al mínimo, todo cabe
+  en una pantalla sin deslizar (auto-escala).
+- `app/manifest.webmanifest` + `app/sw.js` + `app/icons/` — PWA instalable y
+  offline (service worker network-first para el HTML: cada deploy se ve al
+  reabrir la app con internet).
+- `assets/productos/` — Fotos de productos como JPG individuales (150×150).
+- `netlify.toml` — publica la carpeta `app/`.
 
-## ✅ Persistencia (ya resuelto)
+**Despliegue**: GitHub (`yeryscake/POS`, rama `main`) → Netlify auto-deploy →
+`https://golden-marzipan-df7ee2.netlify.app/yeryscake-pos-v2.html`.
+La tablet del local lo tiene como PWA en pantalla de inicio; para tomar una
+actualización hay que cerrar la app por completo y reabrirla con internet.
+Flujo de trabajo: editar aquí → commit → push → pedir en el local que cierren
+y reabran la app (idealmente al cierre del día, nunca a media venta).
 
-La app ya NO usa `window.storage` (era exclusivo de artifacts de Claude.ai). Ahora
-usa **IndexedDB** (`idbGet`/`idbSet`, funciones `load()`, `save()`, `saveImgs()`),
-con migración automática desde `localStorage` si encuentra datos de una versión
-anterior. Además hay un service worker (`app/sw.js`, network-first para el HTML)
-que cachea la app para que funcione sin internet una vez visitada, y un manifest
-para poder instalarla desde Safari ("Agregar a inicio").
+## Sincronización en la nube (Firebase)
 
-Pendiente real para el producto comercial: SQLite/backend propio + respaldo en la
-nube (por ahora el respaldo es manual vía Admin → "Respaldo de datos", exporta/importa
-un `.json` con ventas, inventario, precios y fotos).
+Proyecto Firebase `yeryscake-pos` (Firestore + Auth anónimo). Config embebida en
+los 3 HTML (`FIREBASE_CONFIG`). Reglas: lectura pública, escritura solo autenticado.
+En cada `save()` la tablet sube en segundo plano (sin bloquear la venta si no hay
+internet; icono ☁️/📴 en el header):
+- `catalog/main` → items + toppings + priceV (esto permite **detectar cambios
+  hechos desde el Admin de la tablet**: bajar el doc, compararlo contra
+  `seed()+migrar()` del código, y reflejar las diferencias en el código).
+- `days/{YYYY-MM-DD}` → ventas + gastos del día (alimenta `hoy.html`).
+- `fiados/main` → lista de fiados.
 
-## Funcionalidades ya implementadas y probadas
+## Funcionalidades implementadas
 
-- **Vender**: grilla táctil por 10 categorías (~115 artículos + "Varios" para
-  precio libre), fotos de productos, toppings (franja fija + hoja modal), ticket
-  con cantidades.
-- **Cobro**: efectivo (ingresa con cuánto pagó → calcula devuelta, botones de
-  billetes rápidos) o tarjeta. Valida pago insuficiente.
-- **Inventario**: solo artículos marcados `track:true` (paletas, bolocups, jugos
-  embotellados, bebidas). Botones +/− y reponer. Badge de stock en tiles, alerta
-  roja ≤5, bloqueo al agotarse. Los artículos "al momento" (waffles, café, batidos)
-  no descuentan stock pero SÍ cuentan en el cierre del día.
-- **Ventas / Cierre del día**: totales separados efectivo/tarjeta + total general,
-  número de ventas, unidades, más vendido, detalle por venta, resumen imprimible
-  por artículo (window.print).
-- **Seguridad**: anular factura requiere código de supervisor (modal con input
-  tipo password, nunca prompt() nativo). Zona Admin (precios, artículos, toppings,
-  fotos, códigos) bloqueada con código de administrador; sesión con botón de cerrar
-  que pregunta antes de guardar. Códigos por defecto: supervisor `1234`,
-  admin `2580` (cambiables en Admin).
-- **Fotos**: fotos por defecto embebidas (DEFAULT_IMGS, por nombre de artículo).
-  El admin puede reemplazar cualquier foto desde cámara/galería (se recorta cuadrada
-  y comprime a 140px, se guarda en IMGS por id). "Restaurar original" vuelve a la
-  foto por defecto.
-- **Fiados (cuentas por cobrar)**: tercer método en la hoja de cobro ("Fiado" +
-  nombre del cliente). Descuenta stock al momento pero NO cuenta como venta hasta
-  que se abona. Pestaña "Fiados": pendientes/pagados, saldo por cobrar, botón
-  Abonar (pago parcial o total, efectivo/tarjeta). Los abonos SÍ entran al total
-  del día y aparecen en el cierre como línea aparte. Anular fiado requiere código
-  de supervisor y devuelve el stock. `S.fiados = [{id, name, day, time, items,
-  total, units, abonos:[{day,time,monto,method}]}]`.
-- **Alertas de stock por WhatsApp**: cada artículo con inventario tiene `min`
-  configurable. Dos niveles: 🔴 rojo (stock ≤ min) y 🟡 amarillo/preventivo. Al
-  cobrar, si la venta deja artículos en alerta, se abre hoja con el mensaje armado.
-  Destinatarios por categoría en `S.waDest = [{num, name, cats:'all'|[catIds]}]` —
-  cada uno recibe solo sus categorías. Botón manual "Alertas de stock" en Inventario.
-  Pendiente para la versión comercial: envío 100% automático (WhatsApp Business
-  Cloud API / Twilio) en vez de abrir wa.me manualmente.
-- **Toppings**: franja fija debajo de la grilla (no solo hoja modal) — se toca un
-  topping y se agrega/quita del último producto del ticket con un toque.
-- **Venta varios**: categoría "Varios" con teclado numérico para cobrar cualquier
-  cosa fuera del catálogo (precio libre + descripción).
-- **Respaldo de datos**: Admin → exportar/importar un `.json` con ventas,
-  inventario, precios, fiados y fotos (ver sección de Persistencia arriba).
-- **Migración de datos**: función `migrar()` con flag `S.priceV` (va en `8`) —
-  aplica cambios de precios/artículos/estructura a datos ya guardados sin borrar
-  ventas ni stock.
+- **Vender**: grilla táctil por 10 categorías (~128 artículos + "Varios" precio
+  libre), fotos, toppings (franja fija + hoja modal), ticket con cantidades.
+  Categorías en **orden de prioridad** (desayunos → cups → cakes → batidos →
+  bebidas → waffles → café → jugos → paletas → varios), la app abre en Desayunos.
+  **Reorganizar fichas**: mantener presionado un producto ~0.5s activa modo
+  edición estilo iPhone (tiemblan y se arrastran); "Listo, guardar orden" guarda
+  `pos` por artículo dentro de su categoría.
+- **Cobro**: efectivo (devuelta + botones de billetes), tarjeta, **mixto**
+  (efectivo + tarjeta, valida que sumen el total) y fiado. Valida pago
+  insuficiente. Anti doble-toque en todos los botones de confirmación.
+- **Descuento empleado −12%**: botón en la hoja de cobro → modal grande pide el
+  código personal de 4 dígitos del empleado → mensaje "¡Gracias por tu gran
+  trabajo! Disfrútalo, [nombre] ❤️" → la venta sigue con el precio tachado y
+  registra quién lo usó (`dcto`, `dctoPor`). Empleados editables en Admin
+  (`S.empleados`, códigos ocultos con toque para ver/ocultar, se ocultan al
+  cerrar sesión admin). Empleados actuales: Erica 0207, Dahiana 1312,
+  Wilder 8025, Said 4570.
+- **Gastos/compras de caja**: botón en Ventas; descripción, monto, método y foto
+  de factura opcional (comprimida). Se descuentan del efectivo/tarjeta neto del
+  cierre. Eliminar gasto pide código de supervisor.
+- **Inventario**: artículos `track:true` con `min` configurable. Badge de stock
+  en tiles, alerta roja/amarilla, bloqueo al agotarse. La **alerta de WhatsApp
+  solo se abre al CRUZAR un umbral** (llegar al mínimo o llegar a 1), no en cada
+  venta — anti-invasivo. Destinatarios por categoría en `S.waDest`. El mensaje
+  usa `data-wa` + `location.href` (un apóstrofe en el texto rompía el onclick).
+- **Ventas / Cierre del día**: la fecha cambia sola al detectar nuevo día (timer
+  + visibilitychange). Dos cierres: **resumido** (solo totales, para archivar) y
+  **detallado** (por artículo + gastos). El cierre siempre muestra "DEBE HABER
+  EN CAJA (efectivo)" y "DEBE HABER EN TARJETA" (ventas + abonos − gastos) — el
+  número contra el que se cuenta la caja (sin contar el fondo fijo, que la app
+  NO gestiona todavía). Botón **🖨 por venta individual** para reimprimir un
+  comprobante si el cliente lo pide después.
+- **Fiados**: descuenta stock al momento, NO cuenta como venta hasta abonar.
+  Abonos parciales/totales (efectivo/tarjeta) entran al día en que se abonan.
+  La mercancía fiada SÍ cuenta en unidades/por-artículo del día en que salió.
+- **Seguridad**: anular venta/fiado/gasto pide código de supervisor. Zona Admin
+  bloqueada con código admin. Códigos por defecto: sup `1234`, adm `2580`.
+- **Fotos**: DEFAULT_IMGS embebidas por nombre (con alias en `A` para artículos
+  renombrados); el admin puede reemplazar desde cámara/galería (IMGS por id).
+- **Respaldo**: Admin → exportar/importar `.json` completo.
+- **Migración**: `migrar()` con `S.priceV` (va en **13**) — cambios de precios/
+  artículos/estructura sin borrar datos. Toda alteración del catálogo o del
+  modelo debe ir como nueva versión aquí Y reflejarse en `seed()`.
 
 ## Modelo de datos (estado `S`)
 
 ```js
 S = {
-  codes: { sup:'1234', adm:'2580' },
-  priceV: 8,                       // versión de migración de precios/estructura
-  waDest: [{num, name, cats:'all'|[catId,...]}],   // destinatarios de alertas WhatsApp
+  codes: { sup, adm },
+  priceV: 13,
+  empleados: [{name, code}],                    // descuento 12%
+  waDest: [{num, name, cats:'all'|[catId,...]}],
   toppings: [{id, name, price}],
-  items: [{id, name, price, cat, track, stock, min, color}],
-  sales: [{id, day:'YYYY-MM-DD', time, items:[{name, base, qty, price, itemId|null}],
-           total, units, method:'cash'|'card'|'fiado', paid, change}],
-  fiados: [{id, name, day, time, items, total, units, abonos:[{day,time,monto,method}]}]
+  items: [{id, name, price, cat, track, stock, min, color, pos}], // pos = orden en la grilla
+  sales: [{id, day, time, items:[{name, base, qty, price, itemId|null}], total,
+           units, method:'cash'|'card'|'mixed', paid, change, cashPart, cardPart,
+           dcto, dctoPor}],
+  fiados: [{id, name, day, time, items, total, units, dcto, abonos:[{id,day,time,monto,method}]}],
+  gastos: [{id, day, time, desc, monto, method:'cash'|'card', foto|null}]
 }
-// Categorías (CATS): paletas, cups, waffles, cakes, desayunos, batidos, cafe, jugos, bebidas, varios
-// TOPCATS = ['paletas','cups','waffles'] → categorías que ofrecen toppings al vender
-// IMGS = {itemId: dataURL}  (fotos personalizadas, storage aparte)
-// DEFAULT_IMGS = {nombre: dataURL}  (fotos embebidas por defecto)
+// CATS (en orden de prioridad): desayunos, cups, cakes, batidos, bebidas, waffles, cafe, jugos, paletas, varios
+// TOPCATS = ['paletas','cups','waffles']
+// IMGS = {itemId: dataURL} · DEFAULT_IMGS = {nombre: dataURL}
 ```
 
-Precios actuales = lista oficial de julio 2026 (letreros del local). Paletas $3,
-bolocups $7, waffles completos $14, etc.
+Precios = lista oficial julio 2026 + ajustes hechos desde Admin (fuente de verdad
+del catálogo vivo: la tablet / `catalog/main` en Firebase, no el código).
+
+## Cómo verificar cambios (sin navegador en este entorno)
+
+- Sintaxis JS: extraer los `<script>` y parsear con JavaScriptCore
+  (`osascript -l JavaScript` + `new Function(código)`).
+- Cruzar todos los `$('id')` contra los `id="..."` del HTML (excluir dinámicos
+  `rep-`/`chip-`).
+- Probar lógica extrayendo funciones (`datosDia`, `migrar`, etc.) y corriéndolas
+  con fixtures en JXA.
+- Tras `git push`, verificar el deploy: `curl` del archivo publicado y `diff`
+  contra el local (deben ser idénticos).
 
 ## Hoja de ruta hacia el producto comercial
 
@@ -107,14 +133,14 @@ bolocups $7, waffles completos $14, etc.
 2. **Validación**: presentar a ~5 tiendas de Kralendijk; objetivo 2+ interesadas en ~$20/mes.
 3. **Versión comercial** (reconstruir aquí):
    - Empaquetar como app instalable (Capacitor → iPad/Android) con nombre nuevo.
-   - Persistencia offline-first + respaldo en la nube.
-   - Cuentas por tienda (multi-tenant), onboarding sencillo.
-   - Soporte de impresora de tickets (Epson TM-T20 vía Bluetooth/red es común aquí).
+   - Multi-tenant (cuentas por tienda), onboarding sencillo.
+   - Impresora de tickets (Epson TM-T20 vía Bluetooth/red es común aquí).
    - Multi-idioma: ES / EN / Papiamentu (ventaja competitiva local clave).
    - Configuración de negocio: logo, moneda, impuestos si aplica.
+   - Alertas de stock 100% automáticas (WhatsApp Business Cloud API / Twilio).
+   - Fondo de caja inicial configurable (hoy el cierre no lo contempla).
 4. **Piloto gratuito** en tiendas locales 1–2 meses → testimonios.
-5. **Publicación** en App Store ($99/año Apple Developer) y Play Store ($25 único).
-   Modelo de suscripción mensual.
+5. **Publicación** en App Store ($99/año) y Play Store ($25 único). Suscripción mensual.
 
 ## Preferencias de trabajo de Said
 
@@ -123,3 +149,7 @@ bolocups $7, waffles completos $14, etc.
 - Pensado para personal no técnico (Wilder atiende el local): botones grandes,
   flujos simples, todo en español.
 - El dispositivo del local es un iPad viejo — el rendimiento importa.
+- Antes de publicar cambios que toquen datos: respaldo manual desde Admin y
+  actualizar la tablet al cierre del día, no a media venta.
+- Al retomar una sesión: revisar `catalog/main` en Firebase por si hubo cambios
+  desde el Admin de la tablet, y sincronizarlos al código antes de tocar el catálogo.
