@@ -128,7 +128,7 @@ if(FIREBASE_CONFIG.apiKey === 'PEGAR_AQUI'){
     $('estado').className = 'estado on';
     const data = doc.data();
     const items = (data && data.items) || [];
-    const rel = items.filter(f => f.track && (f.cat==='cups' || f.cat==='cakes'));
+    const rel = items.filter(f => f.track && (f.cat==='cups' || f.cat==='cakes' || f.name==='Arroz con Leche'));
 
     const rojosAhora = new Set(rel.filter(f=>nivelDe(f)==='rojo').map(f=>f.id));
     const nuevosRojos = [...rojosAhora].filter(id => !previosRojos.has(id));

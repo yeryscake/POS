@@ -52,9 +52,9 @@
   .pos{display:grid; grid-template-columns:1fr 340px; gap:14px;}
   .pos > div:first-child{min-width:0; overflow-x:hidden;}
   @media (max-width:820px){ .pos{grid-template-columns:1fr;} }
-  .cats{display:flex; gap:6px; overflow-x:auto; padding:4px 2px 10px;}
-  .cats button{border:none; background:#fff; color:var(--cocoa-soft); font:inherit; font-weight:800; font-size:13px;
-    padding:9px 14px; border-radius:999px; white-space:nowrap; box-shadow:0 2px 0 var(--line);}
+  .cats{display:flex; gap:8px; overflow-x:auto; padding:4px 2px 10px;}
+  .cats button{border:none; background:#fff; color:var(--cocoa-soft); font:inherit; font-weight:800; font-size:17px;
+    padding:14px 22px; border-radius:999px; white-space:nowrap; box-shadow:0 2px 0 var(--line);}
   .cats button.act{background:var(--rose); color:#fff;}
   .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(136px,1fr)); gap:10px;}
   .tile{
@@ -63,6 +63,12 @@
     background:var(--card); box-shadow:0 2px 0 var(--line); color:var(--cocoa);
   }
   .tile:active{transform:scale(.96);}
+  .tile{-webkit-touch-callout:none;}
+  /* modo reorganizar (mantener presionado) */
+  .grid-editing #gridItems .tile{animation:wiggle .32s infinite; touch-action:none;}
+  .grid-editing #gridItems .tile:nth-child(2n){animation-delay:.16s;}
+  @keyframes wiggle{ 0%,100%{transform:rotate(-1.4deg)} 50%{transform:rotate(1.4deg)} }
+  .tile.drag{opacity:.55; transform:scale(1.1); animation:none !important; box-shadow:0 8px 20px rgba(58,42,51,.35);}
   .tile .dot{width:30px; height:30px; border-radius:50% 50% 50% 50% / 60% 60% 40% 40%; margin:0 auto 7px; border:3px solid rgba(0,0,0,.07);}
   .tile img.ph{width:52px; height:52px; object-fit:cover; border-radius:14px; margin:0 auto 6px; display:block; border:2px solid var(--line);}
   .thumb{width:34px; height:34px; object-fit:cover; border-radius:10px; border:2px solid var(--line); flex-shrink:0;}
@@ -337,6 +343,9 @@
   <div class="sheet">
     <h3>💰 Cobrar</h3>
     <div class="pay-total" id="payTotal">$0.00</div>
+    <div style="text-align:center; margin:-6px 0 12px">
+      <button class="chip" id="mDcto" onclick="togDcto()">🧑‍🍳 Descuento empleado −12%</button>
+    </div>
     <div class="pay-method">
       <button id="mCash" class="on" onclick="setMetodo('cash')">💵 Efectivo</button>
       <button id="mCard" onclick="setMetodo('card')">💳 Tarjeta</button>
@@ -465,6 +474,8 @@
   </div>
 </div>
 
+<button id="btnListoGrid" onclick="salirEditGrid()" style="display:none; position:fixed; bottom:22px; left:50%; transform:translateX(-50%); z-index:70; border:none; border-radius:999px; background:var(--purple); color:#fff; font:inherit; font-weight:800; font-size:18px; padding:16px 34px; box-shadow:0 6px 18px rgba(58,42,51,.35)">✅ Listo, guardar orden</button>
+
 <input type="file" id="fotoInput" accept="image/*" style="display:none" onchange="fotoElegida(event)">
 <input type="file" id="gastoFotoInput" accept="image/*" style="display:none" onchange="gastoFotoElegida(event)">
 <div id="printArea"></div>
@@ -477,16 +488,17 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script>
 const PALETTE = ['#FF6B81','#FFB84D','#FFE066','#7BD88F','#3FBFA8','#6BB8FF','#B58CFF','#8A5A44','#F2F2F2','#FF8FB1','#E63950','#25B8C9'];
+/* Orden de prioridad para vender (pedido por Said), no alfabético */
 const CATS = [
-  {id:'paletas',   nombre:'Paletas',          color:'#FF8FB1'},
-  {id:'cups',      nombre:'Bolocups & Cremas',color:'#B58CFF'},
-  {id:'waffles',   nombre:'Waffles & Antojitos', color:'#FFB84D'},
-  {id:'cakes',     nombre:'Cakes & Tortas',   color:'#8A5A44'},
   {id:'desayunos', nombre:'Desayunos',        color:'#FFE066'},
+  {id:'cups',      nombre:'Bolocups & Cremas',color:'#B58CFF'},
+  {id:'cakes',     nombre:'Cakes & Tortas',   color:'#8A5A44'},
   {id:'batidos',   nombre:'Batidos & Shakes', color:'#3FBFA8'},
+  {id:'bebidas',   nombre:'Bebidas',          color:'#6BB8FF'},
+  {id:'waffles',   nombre:'Waffles & Antojitos', color:'#FFB84D'},
   {id:'cafe',      nombre:'Café',             color:'#A9745B'},
   {id:'jugos',     nombre:'Jugos Naturales',  color:'#7BD88F'},
-  {id:'bebidas',   nombre:'Bebidas',          color:'#6BB8FF'},
+  {id:'paletas',   nombre:'Paletas',          color:'#FF8FB1'},
   {id:'varios',    nombre:'Varios',           color:'#8F7383'},
 ];
 const TOPCATS = ['paletas','cups','waffles']; // categorías que ofrecen toppings
@@ -504,7 +516,7 @@ const DEFAULT_IMGS = {"Mango": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABA
   };
   for(const k in A){ if(!DEFAULT_IMGS[k] && DEFAULT_IMGS[A[k]]) DEFAULT_IMGS[k] = DEFAULT_IMGS[A[k]]; }
 })();
-let S=null, ticket=[], curCat='paletas', admCat='paletas';
+let S=null, ticket=[], curCat='desayunos', admCat='desayunos';
 let sheetItem=null, sheetSel=new Set();
 let payMetodo='cash';
 let adminOn=false;
@@ -564,7 +576,7 @@ function it(name, price, cat, track, stock, color, min){ return {id:uid(), name,
 function seed(){
   return {
     codes:{sup:'1234', adm:'2580'},
-    priceV:11,
+    priceV:12,
     waDest:[
       {num:'5997804048', name:'Erica', cats:'all'},
       {num:'5997962511', name:'Dahiana', cats:'all'},
@@ -627,12 +639,12 @@ function seed(){
       it('Galletas Chocochips',2.00,'waffles',0,0), it('Mango Preparado',3.50,'waffles',0,0),
       it('Nucita',1.00,'waffles',0,0),
       it('Raspao buki pret',2.50,'waffles',0,0), it('Banana split buki pret',6.50,'waffles',0,0),
+      it('Arroz con Leche',6.00,'waffles',1,0),
       // CAKES, POSTRES & TORTAS
       it('Slice Chocolate',8.00,'cakes',1,0), it('Slice Napolitana',8.00,'cakes',1,0),
       it('Slice Quesillo',7.00,'cakes',1,0), it('Slice Chocoquesillo',8.00,'cakes',1,0),
       it('Slice Beso de Angel',8.00,'cakes',1,0), it('Slice Uva',8.00,'cakes',1,0,null,2),
       it('Carrot Cake',4.00,'cakes',1,0), it('Vainilla Cake',4.00,'cakes',1,0),
-      it('Arroz con Leche',6.00,'cakes',1,0),
       it('Minicake (4-5 pers)',25.00,'cakes',0,0), it('Torta 10-12 pers',40.00,'cakes',0,0),
       it('Torta 18-20 pers',75.00,'cakes',0,0),
       // DESAYUNOS
@@ -653,7 +665,7 @@ function seed(){
       it('Batido Melón',7.00,'batidos',0,0), it('Batido Fresa',7.00,'batidos',0,0),
       it('Batido Banano',7.00,'batidos',0,0), it('Batido Mango',7.00,'batidos',0,0),
       it('Milkshake Oreo',7.00,'batidos',0,0), it('Milkshake Maracuyá',7.00,'batidos',0,0),
-      it('Milkshake Chocolate',7.00,'batidos',0,0), it('Iced Coffee',7.00,'batidos',0,0),
+      it('Milkshake Chocolate',7.00,'batidos',0,0),
       it('Tropical/Tizana',7.00,'batidos',0,0), it('Milkshake vainilla',7.00,'batidos',0,0),
       it('Milkshake Fresa',7.00,'batidos',0,0), it('Milkshake Caramelo',7.00,'batidos',0,0),
       it('Milkshake Cherry',7.00,'batidos',0,0),
@@ -662,6 +674,7 @@ function seed(){
       it('Mix Yellow Energy',8.00,'batidos',1,0,null,8),
       // CAFÉ
       it('Café Negro',2.50,'cafe',0,0), it('Capuchino',3.00,'cafe',0,0),
+      it('Iced Coffee',7.00,'cafe',0,0),
       it('Latte',3.50,'cafe',0,0), it('Hot Chocolate',4.00,'cafe',0,0),
       // JUGOS NATURALES (botella, con inventario)
       it('Jugo Mango',4.00,'jugos',1,10), it('Jugo Limón',4.00,'jugos',1,10),
@@ -827,6 +840,21 @@ function migrar(){
     });
     S.priceV = 11;
   }
+  if((S.priceV||1) < 12){
+    mchanged = true;
+    // Iced Coffee pasa a Café; Arroz con Leche pasa a Waffles & Antojitos
+    S.items.forEach(f=>{
+      if(f.name==='Iced Coffee') f.cat = 'cafe';
+      if(f.name==='Arroz con Leche') f.cat = 'waffles';
+    });
+    // Posición inicial de cada artículo dentro de su categoría (orden
+    // alfabético actual), para que la grilla arranque igual que antes y
+    // desde ahí se pueda reorganizar arrastrando.
+    CATS.forEach(c=>{
+      abc(S.items.filter(f=>f.cat===c.id)).forEach((f,i)=>{ if(f.pos==null) f.pos = i; });
+    });
+    S.priceV = 12;
+  }
   return mchanged;
 }
 
@@ -967,8 +995,14 @@ function renderCats(){
   $('catBar').innerHTML = CATS.map(c=>
     `<button class="${c.id===curCat?'act':''}" onclick="curCat='${c.id}';render()">${c.nombre}</button>`).join('');
 }
+function ordenGrid(list){
+  return list.slice().sort((a,b)=>{
+    const pa = a.pos==null ? 9999 : a.pos, pb = b.pos==null ? 9999 : b.pos;
+    return pa-pb || a.name.localeCompare(b.name,'es');
+  });
+}
 function renderGrid(){
-  const list = abc(S.items.filter(i=>i.cat===curCat));
+  const list = ordenGrid(S.items.filter(i=>i.cat===curCat));
   const extraVarios = curCat==='varios'
     ? `<button class="tile" style="border:3px dashed var(--rose); background:var(--rose-soft)" onclick="abrirVarios()">
          <div style="font-size:30px; margin-bottom:4px">➕</div>
@@ -984,19 +1018,71 @@ function renderGrid(){
     const visual = src
       ? `<img class="ph" src="${src}" alt="">`
       : `<div class="dot" style="background:${f.color}"></div>`;
-    return `<button class="tile ${out?'agotado':''}" onclick="tapItem('${f.id}')">
+    return `<button class="tile ${out?'agotado':''}" data-id="${f.id}" onpointerdown="gridDown(event,'${f.id}')" onclick="tapItem('${f.id}')">
       ${f.track?`<span class="st ${low?'low':warn?'warn':''}">${f.stock}</span>`:''}
       ${visual}
       <div class="nm">${f.name}</div><div class="pr">${fmt(f.price)}</div>
     </button>`;
   }).join('') + (list.length||extraVarios ? '' : '<div class="vacio">Sin artículos en esta categoría</div>');
 }
+
+/* ── REORGANIZAR LA GRILLA (mantener presionado, como en iPhone) ── */
+let gridEdit = false, dragEl = null, lpTimer = null, lpStart = null;
+function gridDown(ev, id){
+  if(gridEdit){
+    const el = ev.target.closest('[data-id]');
+    if(el){ dragEl = el; el.classList.add('drag'); ev.preventDefault(); }
+    return;
+  }
+  lpStart = {x:ev.clientX, y:ev.clientY};
+  clearTimeout(lpTimer);
+  lpTimer = setTimeout(entrarEditGrid, 550);
+}
+function entrarEditGrid(){
+  lpTimer = null;
+  gridEdit = true;
+  document.body.classList.add('grid-editing');
+  $('btnListoGrid').style.display = '';
+  toast('✋ Arrastra los productos al orden que quieras');
+}
+async function salirEditGrid(){
+  gridEdit = false;
+  document.body.classList.remove('grid-editing');
+  $('btnListoGrid').style.display = 'none';
+  [...$('gridItems').querySelectorAll('[data-id]')].forEach((el,i)=>{
+    const f = S.items.find(x=>x.id===el.dataset.id);
+    if(f) f.pos = i;
+  });
+  await save(); render();
+  toast('✅ Orden guardado');
+}
+document.addEventListener('pointermove', e=>{
+  if(lpTimer && lpStart && Math.hypot(e.clientX-lpStart.x, e.clientY-lpStart.y) > 12){
+    clearTimeout(lpTimer); lpTimer = null; // estaba deslizando, no reorganizando
+  }
+  if(!dragEl) return;
+  const bajo = document.elementFromPoint(e.clientX, e.clientY);
+  const target = bajo && bajo.closest ? bajo.closest('#gridItems [data-id]') : null;
+  if(!target || target===dragEl) return;
+  const kids = [...$('gridItems').querySelectorAll('[data-id]')];
+  if(kids.indexOf(dragEl) < kids.indexOf(target)) target.after(dragEl);
+  else target.before(dragEl);
+});
+document.addEventListener('pointerup', ()=>{
+  clearTimeout(lpTimer); lpTimer = null;
+  if(dragEl){ dragEl.classList.remove('drag'); dragEl = null; }
+});
+document.addEventListener('pointercancel', ()=>{
+  clearTimeout(lpTimer); lpTimer = null;
+  if(dragEl){ dragEl.classList.remove('drag'); dragEl = null; }
+});
 function renderHoy(){
   $('hoyTotal').textContent = fmt(datosDia(hoyISO()).total);
 }
 
 /* ── TICKET ── */
 function tapItem(id){
+  if(gridEdit) return; // en modo reorganizar no se vende
   const f = S.items.find(x=>x.id===id); if(!f) return;
   if(f.track){
     const enTicket = ticket.filter(i=>i.itemId===id).reduce((a,i)=>a+i.qty,0);
@@ -1092,13 +1178,29 @@ function renderTicket(){
 }
 
 /* ── COBRO ── */
+let dctoEmpleado = false;
+function totalCobro(){
+  const t = Math.round(tkTotal()*100)/100;
+  return dctoEmpleado ? Math.round(t*0.88*100)/100 : t;
+}
+function pintarTotalCobro(){
+  const bruto = Math.round(tkTotal()*100)/100;
+  $('payTotal').innerHTML = dctoEmpleado
+    ? `<s style="opacity:.45; font-size:22px">${fmt(bruto)}</s> ${fmt(totalCobro())}`
+    : fmt(bruto);
+  $('mDcto').classList.toggle('on', dctoEmpleado);
+}
+function togDcto(){
+  dctoEmpleado = !dctoEmpleado;
+  pintarTotalCobro(); calcDevuelta(); calcMixto();
+}
 function abrirCobro(){
   if(!ticket.length) return;
-  payMetodo='cash';
+  payMetodo='cash'; dctoEmpleado=false;
   $('mCash').classList.add('on'); $('mCard').classList.remove('on'); $('mMixto').classList.remove('on'); $('mFiado').classList.remove('on');
   $('cashZone').style.display=''; $('fiadoZone').style.display='none'; $('mixedZone').style.display='none';
   $('fiadoNombre').value=''; $('btnConfirmar').textContent='Confirmar venta';
-  $('payTotal').textContent = fmt(tkTotal());
+  pintarTotalCobro();
   $('pagoCon').value=''; calcDevuelta();
   $('mixCash').value=''; $('mixCard').value=''; calcMixto();
   $('payBg').classList.add('open');
@@ -1116,12 +1218,12 @@ function setMetodo(m){
   $('btnConfirmar').textContent = m==='fiado' ? 'Registrar fiado' : 'Confirmar venta';
 }
 function setPago(v){
-  $('pagoCon').value = v===0 ? tkTotal().toFixed(2) : v.toFixed(2);
+  $('pagoCon').value = v===0 ? totalCobro().toFixed(2) : v.toFixed(2);
   calcDevuelta();
 }
 function calcDevuelta(){
   const pago = parseFloat($('pagoCon').value)||0;
-  const dev = pago - tkTotal();
+  const dev = pago - totalCobro();
   const el = $('devuelta');
   if(!$('pagoCon').value){ el.textContent='Devuelta: —'; el.classList.remove('neg'); return; }
   if(dev < 0){ el.textContent='Falta: ' + fmt(Math.abs(dev)); el.classList.add('neg'); }
@@ -1130,7 +1232,7 @@ function calcDevuelta(){
 function calcMixto(){
   const cash = parseFloat($('mixCash').value)||0;
   const card = parseFloat($('mixCard').value)||0;
-  const resto = tkTotal() - cash - card;
+  const resto = totalCobro() - cash - card;
   const el = $('mixResto');
   if(Math.abs(resto) < 0.005){ el.textContent = '✅ Listo, cuadra con el total'; el.classList.remove('neg'); }
   else if(resto > 0){ el.textContent = 'Falta repartir: ' + fmt(resto); el.classList.add('neg'); }
@@ -1138,7 +1240,9 @@ function calcMixto(){
 }
 async function confirmarCobro(){
   if(!ticket.length) return; // evita ventas duplicadas/vacías por doble toque
-  const total = Math.round(tkTotal()*100)/100;
+  const bruto = Math.round(tkTotal()*100)/100;
+  const total = totalCobro();
+  const dcto = Math.round((bruto - total)*100)/100;
   let paid=null, change=null, fiadoNombre='', cashPart=null, cardPart=null;
   if(payMetodo==='cash'){
     paid = parseFloat($('pagoCon').value)||0;
@@ -1166,7 +1270,7 @@ async function confirmarCobro(){
     id:uid(), day:hoyISO(),
     time:new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'}),
     items:ticket.map(i=>({name:i.name + (i.tops.length?' + '+i.tops.join(', '):''), base:i.name, qty:i.qty, price:i.price, itemId:i.track?i.itemId:null})),
-    total, units:ticket.reduce((a,i)=>a+i.qty,0)
+    total, units:ticket.reduce((a,i)=>a+i.qty,0), dcto
   };
   if(payMetodo==='fiado'){
     S.fiados.push(Object.assign(registro, {name:fiadoNombre, abonos:[]}));
@@ -1658,7 +1762,8 @@ function datosDia(day){
   const gastosCard = gastosDia.filter(g=>g.method==='card').reduce((s,g)=>s+g.monto,0);
   const cashNeto = cash + cashA - gastosCash;
   const cardNeto = card + cardA - gastosCard;
-  return {vs, cash, card, cashA, cardA, abonosDia, total, units, unitsFiado, porItem, gastosDia, gastosCash, gastosCard, cashNeto, cardNeto};
+  const dctos = vs.reduce((a,v)=>a+(v.dcto||0),0) + fsDia.reduce((a,v)=>a+(v.dcto||0),0);
+  return {vs, cash, card, cashA, cardA, abonosDia, total, units, unitsFiado, porItem, gastosDia, gastosCash, gastosCard, cashNeto, cardNeto, dctos};
 }
 function metodoLabel(m){ return m==='cash'?'💵 Efectivo' : m==='card'?'💳 Tarjeta' : '🔀 Mixto'; }
 function renderVentas(){
@@ -1680,7 +1785,7 @@ function renderVentas(){
     <div class="sale">
       <div class="bd">
         <div class="hd"><span>🕐 ${v.time} <span class="mtag ${v.method}">${metodoLabel(v.method)}</span></span><span>${fmt(v.total)}</span></div>
-        <div class="det">${v.items.map(i=>i.qty+'× '+i.name).join(' · ')}${v.method==='cash'&&v.paid!=null?` — Pagó ${fmt(v.paid)}, devuelta ${fmt(v.change)}`:''}${v.method==='mixed'?` — 💵 ${fmt(v.cashPart)} + 💳 ${fmt(v.cardPart)}`:''}</div>
+        <div class="det">${v.items.map(i=>i.qty+'× '+i.name).join(' · ')}${v.method==='cash'&&v.paid!=null?` — Pagó ${fmt(v.paid)}, devuelta ${fmt(v.change)}`:''}${v.method==='mixed'?` — 💵 ${fmt(v.cashPart)} + 💳 ${fmt(v.cardPart)}`:''}${v.dcto?` — 🧑‍🍳 desc. empleado −${fmt(v.dcto)}`:''}</div>
       </div>
       <button class="del" onclick="anularVenta('${v.id}')">✕</button>
     </div>`).join('')
@@ -1716,6 +1821,8 @@ function cierreHTML(day, detalle){
       <tr><td>💳 Tarjeta (ventas)</td><td></td><td><b>${fmt(d.card)}</b></td></tr>
       <tr><td>🤝 Abonos de fiados (efectivo)</td><td></td><td><b>${fmt(d.cashA)}</b></td></tr>
       <tr><td>🤝 Abonos de fiados (tarjeta)</td><td></td><td><b>${fmt(d.cardA)}</b></td></tr>
+      ${d.dctos>0 ? `
+      <tr><td>🧑‍🍳 Descuentos de empleados aplicados</td><td></td><td>-${fmt(d.dctos)}</td></tr>` : ''}
       ${d.gastosDia.length ? `
       <tr><td>💸 Gastos/compras (efectivo)</td><td></td><td>-${fmt(d.gastosCash)}</td></tr>
       <tr><td>💸 Gastos/compras (tarjeta)</td><td></td><td>-${fmt(d.gastosCard)}</td></tr>` : ''}
