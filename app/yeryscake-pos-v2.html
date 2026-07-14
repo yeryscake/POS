@@ -292,6 +292,15 @@
       </div>
       <p style="font-size:13px; color:var(--cocoa-soft); margin:4px 6px">El código de <b>supervisor</b> anula ventas. El código de <b>admin</b> abre esta zona.</p>
 
+      <h2>🧑‍🍳 Empleados (descuento 12%)</h2>
+      <div class="form">
+        <input type="text" id="empNombre" placeholder="Nombre del empleado">
+        <input type="text" inputmode="numeric" maxlength="4" id="empNuevoCode" placeholder="Código 4 dígitos" style="width:150px">
+        <button class="btn" onclick="addEmpleado()">Agregar empleado</button>
+      </div>
+      <div id="empList"></div>
+      <p style="font-size:13px; color:var(--cocoa-soft); margin:4px 6px">Cada empleado usa su código personal en la hoja de cobro para aplicar su descuento del 12%. La venta registra quién lo usó.</p>
+
       <h2>📲 Alertas de stock por WhatsApp</h2>
       <div class="form">
         <input type="text" id="waNombre" placeholder="Nombre" style="min-width:100px; flex:0.5">
@@ -595,7 +604,13 @@ function it(name, price, cat, track, stock, color, min){ return {id:uid(), name,
 function seed(){
   return {
     codes:{sup:'1234', adm:'2580'},
-    priceV:12,
+    priceV:13,
+    empleados:[
+      {name:'Erica', code:'0207'},
+      {name:'Dahiana', code:'1312'},
+      {name:'Wilder', code:'8025'},
+      {name:'Said', code:'4570'},
+    ],
     waDest:[
       {num:'5997804048', name:'Erica', cats:'all'},
       {num:'5997962511', name:'Dahiana', cats:'all'},
@@ -873,6 +888,16 @@ function migrar(){
       abc(S.items.filter(f=>f.cat===c.id)).forEach((f,i)=>{ if(f.pos==null) f.pos = i; });
     });
     S.priceV = 12;
+  }
+  if((S.priceV||1) < 13){
+    mchanged = true;
+    S.empleados = S.empleados || [
+      {name:'Erica', code:'0207'},
+      {name:'Dahiana', code:'1312'},
+      {name:'Wilder', code:'8025'},
+      {name:'Said', code:'4570'},
+    ];
+    S.priceV = 13;
   }
   return mchanged;
 }
@@ -1198,7 +1223,6 @@ function renderTicket(){
 
 /* ── COBRO ── */
 let dctoEmpleado = false, dctoNombre = '';
-const EMPLEADOS = {'0207':'Erica', '1312':'Dahiana', '8025':'Wilder', '4570':'Said'};
 function totalCobro(){
   const t = Math.round(tkTotal()*100)/100;
   return dctoEmpleado ? Math.round(t*0.88*100)/100 : t;
@@ -1225,12 +1249,12 @@ function togDcto(){
 function cerrarEmpleado(){ $('empBg').classList.remove('open'); }
 let empTimer = null;
 function confirmarEmpleado(){
-  const nombre = EMPLEADOS[$('empCode').value.trim()];
-  if(!nombre){ toast('❌ Código incorrecto'); $('empCode').value=''; return; }
-  dctoEmpleado = true; dctoNombre = nombre;
+  const emp = (S.empleados||[]).find(e=>e.code===$('empCode').value.trim());
+  if(!emp){ toast('❌ Código incorrecto'); $('empCode').value=''; return; }
+  dctoEmpleado = true; dctoNombre = emp.name;
   pintarTotalCobro(); calcDevuelta(); calcMixto();
   $('empPide').style.display = 'none';
-  $('empMsg').textContent = `¡Gracias por tu gran trabajo! Disfrútalo, ${nombre}`;
+  $('empMsg').textContent = `¡Gracias por tu gran trabajo! Disfrútalo, ${emp.name}`;
   $('empGracias').style.display = '';
   clearTimeout(empTimer);
   empTimer = setTimeout(cerrarEmpleado, 2500);
@@ -1689,6 +1713,12 @@ function renderAdmin(){
     </div>`).join('');
   $('codSup').value = S.codes.sup;
   $('codAdm').value = S.codes.adm;
+  $('empList').innerHTML = (S.empleados||[]).map((e,i)=>`
+    <div class="adm-row">
+      <div class="n">🧑‍🍳 ${e.name}</div>
+      <span class="tag">código ${e.code}</span>
+      <button class="btn red" onclick="delEmpleado(${i})">Quitar</button>
+    </div>`).join('') || '<div class="vacio">Sin empleados registrados</div>';
   $('waCats').innerHTML =
     `<button class="chip ${waTodo?'on':''}" onclick="waTodo=true;waSelCats.clear();render()">Todo el inventario</button>` +
     CATS.map(c=>`<button class="chip ${!waTodo&&waSelCats.has(c.id)?'on':''}" onclick="togWaCat('${c.id}')">${c.nombre}</button>`).join('');
@@ -1708,6 +1738,25 @@ function togWaCat(id){
   waSelCats.has(id) ? waSelCats.delete(id) : waSelCats.add(id);
   if(!waSelCats.size) waTodo = true;
   render();
+}
+async function addEmpleado(){
+  const nombre = $('empNombre').value.trim();
+  const code = $('empNuevoCode').value.trim();
+  if(!nombre){ toast('Escribe el nombre del empleado'); return; }
+  if(!/^\d{4}$/.test(code)){ toast('El código debe ser de 4 dígitos'); return; }
+  S.empleados = S.empleados || [];
+  if(S.empleados.some(e=>e.code===code)){ toast('Ese código ya lo tiene otro empleado'); return; }
+  if(code===S.codes.sup || code===S.codes.adm){ toast('Ese código ya se usa como código de seguridad'); return; }
+  S.empleados.push({name:nombre, code});
+  $('empNombre').value=''; $('empNuevoCode').value='';
+  await save(); render(); toast('🧑‍🍳 ' + nombre + ' agregado');
+}
+async function delEmpleado(i){
+  const e = S.empleados[i];
+  if(!e) return;
+  if(!confirm('¿Quitar a ' + e.name + '? Ya no podrá usar su descuento.')) return;
+  S.empleados.splice(i,1);
+  await save(); render();
 }
 async function addWa(){
   const nombre = $('waNombre').value.trim();
@@ -1828,6 +1877,7 @@ function renderVentas(){
         <div class="hd"><span>🕐 ${v.time} <span class="mtag ${v.method}">${metodoLabel(v.method)}</span></span><span>${fmt(v.total)}</span></div>
         <div class="det">${v.items.map(i=>i.qty+'× '+i.name).join(' · ')}${v.method==='cash'&&v.paid!=null?` — Pagó ${fmt(v.paid)}, devuelta ${fmt(v.change)}`:''}${v.method==='mixed'?` — 💵 ${fmt(v.cashPart)} + 💳 ${fmt(v.cardPart)}`:''}${v.dcto?` — 🧑‍🍳 desc. empleado${v.dctoPor?' ('+v.dctoPor+')':''} −${fmt(v.dcto)}`:''}</div>
       </div>
+      <button class="del" style="background:#E7F0FF; color:#3568C9" onclick="imprimirVenta('${v.id}')">🖨</button>
       <button class="del" onclick="anularVenta('${v.id}')">✕</button>
     </div>`).join('')
     : '<div class="vacio">Sin ventas este día</div>';
@@ -1895,6 +1945,33 @@ function mostrarCierre(detalle){
 }
 function verCierreResumen(){ mostrarCierre(false); }
 function verCierreDetalle(){ mostrarCierre(true); }
+
+/* Comprobante de una venta individual (si el cliente lo pide después) */
+function imprimirVenta(id){
+  const v = S.sales.find(x=>x.id===id); if(!v) return;
+  const metodo = v.method==='cash' ? '💵 Efectivo' : v.method==='card' ? '💳 Tarjeta' : '🔀 Mixto';
+  const filas = v.items.map(i=>
+    `<tr><td>${i.qty}× ${i.name}</td><td></td><td>${fmt(i.qty*i.price)}</td></tr>`).join('');
+  const html = `
+    <h3 style="margin:0">🧾 Comprobante de pago — Yery'sCake Bonaire</h3>
+    <p style="margin:4px 0 12px; color:#777; font-weight:700">${v.day} · ${v.time} · ${metodo}</p>
+    <table class="cierre-tabla">
+      <tr><th>Artículo</th><th></th><th>Valor</th></tr>
+      ${filas}
+      ${v.dcto ? `<tr><td>🧑‍🍳 Descuento empleado${v.dctoPor?' ('+v.dctoPor+')':''}</td><td></td><td>-${fmt(v.dcto)}</td></tr>` : ''}
+      <tr><td><b>TOTAL PAGADO</b></td><td></td><td><b>${fmt(v.total)}</b></td></tr>
+      ${v.method==='cash' && v.paid!=null ? `
+      <tr><td>Pagó con</td><td></td><td>${fmt(v.paid)}</td></tr>
+      <tr><td>Devuelta</td><td></td><td>${fmt(v.change)}</td></tr>` : ''}
+      ${v.method==='mixed' ? `
+      <tr><td>💵 Efectivo</td><td></td><td>${fmt(v.cashPart)}</td></tr>
+      <tr><td>💳 Tarjeta</td><td></td><td>${fmt(v.cardPart)}</td></tr>` : ''}
+    </table>
+    <p style="margin:14px 0 0; text-align:center; color:#777; font-weight:700">¡Gracias por su compra! 🍦</p>`;
+  $('cierreBody').innerHTML = html;
+  $('printArea').innerHTML = html;
+  $('cierreBg').classList.add('open');
+}
 
 load();
 if('serviceWorker' in navigator){
