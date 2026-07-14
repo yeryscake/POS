@@ -1642,6 +1642,7 @@ async function logoutAdmin(){
   if(confirm('¿Guardar los cambios y cerrar la sesión de administrador?')){
     await save(); await saveImgs();
     adminOn = false;
+    empVer.clear(); // los códigos de empleados vuelven a quedar ocultos
     render();
     toast('🔒 Sesión de admin cerrada');
   }
@@ -1716,7 +1717,7 @@ function renderAdmin(){
   $('empList').innerHTML = (S.empleados||[]).map((e,i)=>`
     <div class="adm-row">
       <div class="n">🧑‍🍳 ${e.name}</div>
-      <span class="tag">código ${e.code}</span>
+      <span class="tag" style="cursor:pointer; min-width:104px; text-align:center" onclick="togVerEmp(${i})">${empVer.has(i) ? '👁 '+e.code : 'código ••••'}</span>
       <button class="btn red" onclick="delEmpleado(${i})">Quitar</button>
     </div>`).join('') || '<div class="vacio">Sin empleados registrados</div>';
   $('waCats').innerHTML =
@@ -1739,6 +1740,11 @@ function togWaCat(id){
   if(!waSelCats.size) waTodo = true;
   render();
 }
+let empVer = new Set(); // índices de empleados con el código visible (solo en esta sesión)
+function togVerEmp(i){
+  empVer.has(i) ? empVer.delete(i) : empVer.add(i);
+  renderAdmin();
+}
 async function addEmpleado(){
   const nombre = $('empNombre').value.trim();
   const code = $('empNuevoCode').value.trim();
@@ -1749,6 +1755,7 @@ async function addEmpleado(){
   if(code===S.codes.sup || code===S.codes.adm){ toast('Ese código ya se usa como código de seguridad'); return; }
   S.empleados.push({name:nombre, code});
   $('empNombre').value=''; $('empNuevoCode').value='';
+  empVer.clear();
   await save(); render(); toast('🧑‍🍳 ' + nombre + ' agregado');
 }
 async function delEmpleado(i){
@@ -1756,6 +1763,7 @@ async function delEmpleado(i){
   if(!e) return;
   if(!confirm('¿Quitar a ' + e.name + '? Ya no podrá usar su descuento.')) return;
   S.empleados.splice(i,1);
+  empVer.clear();
   await save(); render();
 }
 async function addWa(){
