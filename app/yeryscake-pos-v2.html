@@ -608,13 +608,13 @@ function seed(){
       it('Choc, Vainilla y Fresa',3.00,'paletas',1,20,'#B07B5E'),
       // BOLOCUPS & CREMAS
       it('Cheesecake Maracuyá',7.00,'cups',1,10), it('Cheesecake Oreo',7.00,'cups',1,10),
-      it('Cheesecake Fresa',7.00,'cups',1,10), it('Cheesecake Lotus',7.00,'cups',1,10),
+      it('Cheesecake Fresa',7.00,'cups',1,10,null,2), it('Cheesecake Lotus',7.00,'cups',1,10,null,2),
       it('Glas Kibra',7.00,'cups',1,10), it('Bolocup Chocolate',7.00,'cups',1,10),
       it('Bolocup 3 Leches',7.00,'cups',1,10),
       it('Fresacake',12.00,'cups',0,0), it('Fresacake Grande',16.50,'cups',0,0),
       it('Chocofresas',12.00,'cups',0,0), it('Chocofresas Grande',16.50,'cups',0,0),
       it('Fresas con Crema 9oz',10.00,'cups',1,0), it('Fresas con Crema 12oz',15.00,'cups',1,0),
-      it('Mango con Crema 9oz',10.00,'cups',0,0), it('Mango con Crema 12oz',12.00,'cups',0,0),
+      it('Mango con Crema 9oz',10.00,'cups',0,0), it('Mango con Crema 12oz',15.00,'cups',0,0),
       // WAFFLES, HELADOS & ANTOJITOS
       it('Waffle Frutos Rojos',14.00,'waffles',0,0), it('Waffle Mango',14.00,'waffles',0,0),
       it('Waffle Oreo',14.00,'waffles',0,0), it('Waffle Banana',14.00,'waffles',0,0),
@@ -623,14 +623,14 @@ function seed(){
       it('Bola Extra',1.50,'waffles',0,0), it('Animal Cone',3.50,'waffles',0,0),
       it('Banana Split',10.00,'waffles',0,0), it('Cucurucho',10.00,'waffles',0,0),
       it('Obleas',8.50,'waffles',0,0),
-      it('Minidonuts',6.00,'waffles',0,0), it('Raspao',4.00,'waffles',0,0),
+      it('Minidonuts',6.00,'waffles',1,0), it('Raspao',4.00,'waffles',0,0),
       it('Galletas Chocochips',2.00,'waffles',0,0), it('Mango Preparado',3.50,'waffles',0,0),
       it('Nucita',1.00,'waffles',0,0),
       it('Raspao buki pret',2.50,'waffles',0,0), it('Banana split buki pret',6.50,'waffles',0,0),
       // CAKES, POSTRES & TORTAS
       it('Slice Chocolate',8.00,'cakes',1,0), it('Slice Napolitana',8.00,'cakes',1,0),
       it('Slice Quesillo',7.00,'cakes',1,0), it('Slice Chocoquesillo',8.00,'cakes',1,0),
-      it('Slice Beso de Angel',8.00,'cakes',1,0), it('Slice Uva',8.00,'cakes',1,0),
+      it('Slice Beso de Angel',8.00,'cakes',1,0), it('Slice Uva',8.00,'cakes',1,0,null,2),
       it('Carrot Cake',4.00,'cakes',1,0), it('Vainilla Cake',4.00,'cakes',1,0),
       it('Arroz con Leche',6.00,'cakes',1,0),
       it('Minicake (4-5 pers)',25.00,'cakes',0,0), it('Torta 10-12 pers',40.00,'cakes',0,0),
@@ -1137,12 +1137,13 @@ function calcMixto(){
   else{ el.textContent = 'Sobran ' + fmt(Math.abs(resto)) + ' — ajusta los montos'; el.classList.add('neg'); }
 }
 async function confirmarCobro(){
-  const total = tkTotal();
+  if(!ticket.length) return; // evita ventas duplicadas/vacías por doble toque
+  const total = Math.round(tkTotal()*100)/100;
   let paid=null, change=null, fiadoNombre='', cashPart=null, cardPart=null;
   if(payMetodo==='cash'){
     paid = parseFloat($('pagoCon').value)||0;
-    if(paid < total){ toast('El pago no alcanza el total'); return; }
-    change = paid - total;
+    if(paid < total - 0.005){ toast('El pago no alcanza el total'); return; }
+    change = Math.round((paid - total)*100)/100;
   }
   if(payMetodo==='mixed'){
     cashPart = parseFloat($('mixCash').value)||0;
@@ -1265,6 +1266,7 @@ async function confirmarAbono(){
   const monto = parseFloat($('abonoMonto').value)||0;
   if(monto <= 0){ toast('Escribe el monto del abono'); return; }
   if(monto > saldo + 0.005){ toast('El abono no puede ser mayor al saldo ('+fmt(saldo)+')'); return; }
+  abonoFiadoId = null; // evita abono duplicado por doble toque
   f.abonos = f.abonos || [];
   f.abonos.push({id:uid(), day:hoyISO(),
     time:new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'}),
@@ -1408,6 +1410,7 @@ function gastoFotoElegida(ev){
   reader.readAsDataURL(file);
 }
 async function guardarGasto(){
+  if(!$('gastoBg').classList.contains('open')) return; // evita gasto duplicado por doble toque
   const desc = $('gastoDesc').value.trim();
   const monto = parseFloat($('gastoMonto').value)||0;
   if(!desc){ toast('Escribe qué se compró'); return; }
@@ -1451,6 +1454,7 @@ async function chStock(id,d){
 async function reponer(id){
   const n = parseInt($('rep-'+id).value,10);
   if(!n || n<=0){ toast('Escribe la cantidad'); return; }
+  $('rep-'+id).value = ''; // evita reposición duplicada por doble toque
   const f = S.items.find(x=>x.id===id);
   f.stock += n;
   await save(); render();
@@ -1667,8 +1671,8 @@ function renderVentas(){
     <div class="stat"><b>${fmt(d.card + d.cardA)}</b><span>💳 Tarjeta cobrada</span></div>
     <div class="stat"><b>${fmt(d.cashA + d.cardA)}</b><span>🤝 Abonos fiados</span></div>
     ${d.gastosDia.length ? `
-    <div class="stat" style="color:var(--danger)"><b>-${fmt(d.gastosCash + d.gastosCard)}</b><span>💸 Gastos/compras</span></div>
-    <div class="stat"><b>${fmt(d.cashNeto)}</b><span>💰 Efectivo neto en caja</span></div>` : ''}
+    <div class="stat" style="color:var(--danger)"><b>-${fmt(d.gastosCash + d.gastosCard)}</b><span>💸 Gastos/compras</span></div>` : ''}
+    <div class="stat"><b>${fmt(d.cashNeto)}</b><span>💰 Debe haber en caja</span></div>
     <div class="stat"><b>${d.vs.length}</b><span>Ventas</span></div>
     <div class="stat"><b>${d.units}</b><span>Unidades salidas${d.unitsFiado?` (${d.unitsFiado} fiadas)`:''}</span></div>
     <div class="stat"><b style="font-size:15px">${top?top[0]+' ('+top[1].qty+')':'—'}</b><span>Más vendido</span></div>`;
@@ -1716,9 +1720,8 @@ function cierreHTML(day, detalle){
       <tr><td>💸 Gastos/compras (efectivo)</td><td></td><td>-${fmt(d.gastosCash)}</td></tr>
       <tr><td>💸 Gastos/compras (tarjeta)</td><td></td><td>-${fmt(d.gastosCard)}</td></tr>` : ''}
       <tr><td><b>TOTAL DEL DÍA (ventas)</b></td><td></td><td><b>${fmt(d.total)}</b></td></tr>
-      ${d.gastosDia.length ? `
-      <tr><td><b>💰 Efectivo neto en caja</b></td><td></td><td><b>${fmt(d.cashNeto)}</b></td></tr>
-      <tr><td><b>💳 Tarjeta neta</b></td><td></td><td><b>${fmt(d.cardNeto)}</b></td></tr>` : ''}
+      <tr><td><b>💰 DEBE HABER EN CAJA (efectivo)</b><br><span style="font-weight:600;font-size:12px;color:#777">ventas + abonos − gastos, sin contar el fondo fijo</span></td><td></td><td><b>${fmt(d.cashNeto)}</b></td></tr>
+      <tr><td><b>💳 DEBE HABER EN TARJETA</b></td><td></td><td><b>${fmt(d.cardNeto)}</b></td></tr>
       <tr><td>Pendiente por cobrar (todos los fiados)</td><td></td><td>${fmt(S.fiados.reduce((a,f)=>a+saldoDe(f),0))}</td></tr>
       <tr><td>Número de ventas</td><td></td><td>${d.vs.length}</td></tr>
       <tr><td>Unidades salidas del almacén</td><td></td><td>${d.units}</td></tr>
