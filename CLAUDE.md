@@ -85,8 +85,10 @@ internet; icono ☁️/📴 en el header):
 - **Fiados**: descuenta stock al momento, NO cuenta como venta hasta abonar.
   Abonos parciales/totales (efectivo/tarjeta) entran al día en que se abonan.
   La mercancía fiada SÍ cuenta en unidades/por-artículo del día en que salió.
-- **Seguridad**: anular venta/fiado/gasto pide código de supervisor. Zona Admin
-  bloqueada con código admin. Códigos por defecto: sup `1234`, adm `2580`.
+- **Seguridad**: anular venta/fiado/gasto pide código de supervisor. La pestaña
+  **Inventario** pide código de supervisor al entrar (se vuelve a bloquear al
+  salir de la pestaña). Zona Admin bloqueada con código admin. Códigos por
+  defecto: sup `1234`, adm `2580`.
 - **Fotos**: DEFAULT_IMGS embebidas por nombre (con alias en `A` para artículos
   renombrados); el admin puede reemplazar desde cámara/galería (IMGS por id).
 - **Respaldo**: Admin → exportar/importar `.json` completo.

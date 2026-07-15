@@ -225,11 +225,22 @@
 
   <!-- INVENTARIO -->
   <section id="pg-inv" style="display:none">
-    <div class="form" style="justify-content:space-between">
-      <h2 style="margin:0">Stock (artículos con control de inventario)</h2>
-      <button class="btn purple" onclick="mostrarAlertas(itemsBajos())">📲 Alertas de stock</button>
+    <div class="lock" id="invLock">
+      <div class="ic">🔒</div>
+      <h3>Inventario</h3>
+      <p style="color:var(--cocoa-soft); font-size:14px">Ingresa el código de supervisor para ver y modificar el stock.</p>
+      <div class="form" style="box-shadow:none; padding:0; justify-content:center">
+        <input type="password" inputmode="numeric" id="invCodeIn" placeholder="Código" onkeydown="if(event.key==='Enter')unlockInv()">
+        <button class="btn purple" onclick="unlockInv()">Entrar</button>
+      </div>
     </div>
-    <div id="invList"></div>
+    <div id="invPanel" style="display:none">
+      <div class="form" style="justify-content:space-between">
+        <h2 style="margin:0">Stock (artículos con control de inventario)</h2>
+        <button class="btn purple" onclick="mostrarAlertas(itemsBajos())">📲 Alertas de stock</button>
+      </div>
+      <div id="invList"></div>
+    </div>
   </section>
 
   <!-- FIADOS -->
@@ -551,6 +562,7 @@ let S=null, ticket=[], curCat='desayunos', admCat='desayunos';
 let sheetItem=null, sheetSel=new Set();
 let payMetodo='cash';
 let adminOn=false;
+let invOn=false; // Inventario protegido con código de supervisor
 
 const $ = id => document.getElementById(id);
 
@@ -1024,6 +1036,7 @@ function toast(t){
 /* ── NAVEGACIÓN ── */
 function go(p){
   checkNuevoDia();
+  if(p!=='inv') invOn = false; // al salir de Inventario vuelve a pedir código
   ['vender','inv','fiados','admin','ventas'].forEach(x=>{ $('pg-'+x).style.display = x===p?'':'none'; });
   $('tabVender').classList.toggle('act',p==='vender');
   $('tabInv').classList.toggle('act',p==='inv');
@@ -1605,7 +1618,16 @@ function verFoto(id){
 }
 
 /* ── INVENTARIO ── */
+function unlockInv(){
+  const code = $('invCodeIn').value;
+  if(code!==S.codes.sup && code!==S.codes.adm){ toast('❌ Código incorrecto'); $('invCodeIn').value=''; return; }
+  invOn = true; $('invCodeIn').value='';
+  render(); toast('🔓 Inventario desbloqueado');
+}
 function renderInv(){
+  $('invLock').style.display = invOn ? 'none' : '';
+  $('invPanel').style.display = invOn ? '' : 'none';
+  if(!invOn) return;
   const catIdx = id => CATS.findIndex(c=>c.id===id);
   const list = S.items.filter(i=>i.track).slice()
     .sort((a,b)=> catIdx(a.cat)-catIdx(b.cat) || a.name.localeCompare(b.name,'es'));
@@ -1621,11 +1643,13 @@ function renderInv(){
     </div>`).join('') || '<div class="vacio">Ningún artículo tiene control de inventario</div>';
 }
 async function chStock(id,d){
+  if(!invOn) return;
   const f = S.items.find(x=>x.id===id); if(!f) return;
   f.stock = Math.max(0, f.stock + d);
   await save(); render();
 }
 async function reponer(id){
+  if(!invOn) return;
   const n = parseInt($('rep-'+id).value,10);
   if(!n || n<=0){ toast('Escribe la cantidad'); return; }
   $('rep-'+id).value = ''; // evita reposición duplicada por doble toque
