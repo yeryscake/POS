@@ -656,6 +656,7 @@ function seed(){
       {id:uid(),name:'Melon',price:1},
       {id:uid(),name:'Papaya',price:1},
       {id:uid(),name:'Uva',price:1},
+      {id:uid(),name:'Kefir',price:2},
     ],
     items:[
       // PALETAS (con inventario) — todas $3
@@ -1022,6 +1023,11 @@ async function importarRespaldo(ev){
     const data = JSON.parse(await file.text());
     if(!data || !data.S || !Array.isArray(data.S.items)) throw new Error('formato inválido');
     S = data.S; IMGS = data.IMGS || {};
+    // un respaldo puede venir de una versión vieja: aplicar las mismas
+    // normalizaciones y migraciones que al arrancar la app
+    if(!S.codes) S.codes = {sup:'1234', adm:'2580'};
+    S.gastos = S.gastos || [];
+    migrar();
     await save(); await saveImgs();
     render();
     toast('Respaldo restaurado');
@@ -1380,6 +1386,7 @@ async function confirmarCobro(){
 /* ── VENTA VARIOS ── */
 let variosStr = '';
 function abrirVarios(){
+  if(gridEdit) return; // en modo reorganizar no se vende
   variosStr = '';
   $('variosDesc').value = '';
   $('variosPrecio').textContent = '$0.00';
