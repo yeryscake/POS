@@ -60,8 +60,10 @@ internet; icono ☁️/📴 en el header):
   muestra "DEBE HABER EN TRANSFERENCIAS" solo si hubo), **mixto** (efectivo +
   tarjeta, valida que sumen el total) y fiado. Valida pago insuficiente.
   Anti doble-toque en todos los botones de confirmación.
-- **Descuento empleado −12%**: botón en la hoja de cobro → modal grande pide el
-  código personal de 4 dígitos del empleado → mensaje "¡Gracias por tu gran
+- **Descuentos**: botón "🏷️ Descuento −5%" (general, sin código) y
+  **descuento empleado −12%** — no se acumulan entre sí (activar uno apaga el
+  otro); la venta guarda `dctoPct`. El de empleado: botón en la hoja de cobro
+  → modal grande pide el código personal de 4 dígitos del empleado → mensaje "¡Gracias por tu gran
   trabajo! Disfrútalo, [nombre] ❤️" → la venta sigue con el precio tachado y
   registra quién lo usó (`dcto`, `dctoPor`). Empleados editables en Admin
   (`S.empleados`, códigos ocultos con toque para ver/ocultar, se ocultan al

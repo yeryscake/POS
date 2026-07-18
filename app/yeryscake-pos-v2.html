@@ -366,6 +366,7 @@
     <div class="pay-total" id="payTotal">$0.00</div>
     <div style="text-align:center; margin:-6px 0 12px">
       <button class="chip" id="mDcto" onclick="togDcto()">🧑‍🍳 Descuento empleado −12%</button>
+      <button class="chip" id="mDcto5" onclick="togDcto5()">🏷️ Descuento −5%</button>
     </div>
     <div class="pay-method">
       <button id="mCash" class="on" onclick="setMetodo('cash')">💵 Efectivo</button>
@@ -1244,18 +1245,22 @@ function renderTicket(){
 }
 
 /* ── COBRO ── */
-let dctoEmpleado = false, dctoNombre = '';
+let dctoEmpleado = false, dctoNombre = '', dcto5 = false;
+function dctoPctActual(){ return dctoEmpleado ? 12 : dcto5 ? 5 : 0; }
 function totalCobro(){
   const t = Math.round(tkTotal()*100)/100;
-  return dctoEmpleado ? Math.round(t*0.88*100)/100 : t;
+  const pct = dctoPctActual();
+  return pct ? Math.round(t*(100-pct))/100 : t;
 }
 function pintarTotalCobro(){
   const bruto = Math.round(tkTotal()*100)/100;
-  $('payTotal').innerHTML = dctoEmpleado
+  $('payTotal').innerHTML = dctoPctActual()
     ? `<s style="opacity:.45; font-size:22px">${fmt(bruto)}</s> ${fmt(totalCobro())}`
     : fmt(bruto);
   $('mDcto').classList.toggle('on', dctoEmpleado);
   $('mDcto').textContent = dctoEmpleado ? `🧑‍🍳 Descuento de ${dctoNombre} −12% ✓` : '🧑‍🍳 Descuento empleado −12%';
+  $('mDcto5').classList.toggle('on', dcto5);
+  $('mDcto5').textContent = dcto5 ? '🏷️ Descuento −5% ✓' : '🏷️ Descuento −5%';
 }
 function togDcto(){
   if(dctoEmpleado){ // quitar el descuento no pide código
@@ -1268,12 +1273,17 @@ function togDcto(){
   $('empBg').classList.add('open');
   setTimeout(()=>$('empCode').focus(), 100);
 }
+function togDcto5(){
+  dcto5 = !dcto5;
+  if(dcto5){ dctoEmpleado = false; dctoNombre = ''; } // no se acumulan
+  pintarTotalCobro(); calcDevuelta(); calcMixto();
+}
 function cerrarEmpleado(){ $('empBg').classList.remove('open'); }
 let empTimer = null;
 function confirmarEmpleado(){
   const emp = (S.empleados||[]).find(e=>e.code===$('empCode').value.trim());
   if(!emp){ toast('❌ Código incorrecto'); $('empCode').value=''; return; }
-  dctoEmpleado = true; dctoNombre = emp.name;
+  dctoEmpleado = true; dctoNombre = emp.name; dcto5 = false; // no se acumulan
   pintarTotalCobro(); calcDevuelta(); calcMixto();
   $('empPide').style.display = 'none';
   $('empMsg').textContent = `¡Gracias por tu gran trabajo! Disfrútalo, ${emp.name}`;
@@ -1283,7 +1293,7 @@ function confirmarEmpleado(){
 }
 function abrirCobro(){
   if(!ticket.length) return;
-  payMetodo='cash'; dctoEmpleado=false; dctoNombre='';
+  payMetodo='cash'; dctoEmpleado=false; dctoNombre=''; dcto5=false;
   $('mCash').classList.add('on'); $('mCard').classList.remove('on'); $('mTransfer').classList.remove('on'); $('mMixto').classList.remove('on'); $('mFiado').classList.remove('on');
   $('cashZone').style.display=''; $('fiadoZone').style.display='none'; $('mixedZone').style.display='none';
   $('fiadoNombre').value=''; $('btnConfirmar').textContent='Confirmar venta';
@@ -1358,7 +1368,7 @@ async function confirmarCobro(){
     id:uid(), day:hoyISO(),
     time:new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'}),
     items:ticket.map(i=>({name:i.name + (i.tops.length?' + '+i.tops.join(', '):''), base:i.name, qty:i.qty, price:i.price, itemId:i.track?i.itemId:null})),
-    total, units:ticket.reduce((a,i)=>a+i.qty,0), dcto, dctoPor: dcto>0 ? dctoNombre : ''
+    total, units:ticket.reduce((a,i)=>a+i.qty,0), dcto, dctoPor: dcto>0 ? dctoNombre : '', dctoPct: dcto>0 ? dctoPctActual() : 0
   };
   if(payMetodo==='fiado'){
     S.fiados.push(Object.assign(registro, {name:fiadoNombre, abonos:[]}));
@@ -1924,7 +1934,7 @@ function renderVentas(){
     <div class="sale">
       <div class="bd">
         <div class="hd"><span>🕐 ${v.time} <span class="mtag ${v.method}">${metodoLabel(v.method)}</span></span><span>${fmt(v.total)}</span></div>
-        <div class="det">${v.items.map(i=>i.qty+'× '+i.name).join(' · ')}${v.method==='cash'&&v.paid!=null?` — Pagó ${fmt(v.paid)}, devuelta ${fmt(v.change)}`:''}${v.method==='mixed'?` — 💵 ${fmt(v.cashPart)} + 💳 ${fmt(v.cardPart)}`:''}${v.dcto?` — 🧑‍🍳 desc. empleado${v.dctoPor?' ('+v.dctoPor+')':''} −${fmt(v.dcto)}`:''}</div>
+        <div class="det">${v.items.map(i=>i.qty+'× '+i.name).join(' · ')}${v.method==='cash'&&v.paid!=null?` — Pagó ${fmt(v.paid)}, devuelta ${fmt(v.change)}`:''}${v.method==='mixed'?` — 💵 ${fmt(v.cashPart)} + 💳 ${fmt(v.cardPart)}`:''}${v.dcto?(v.dctoPor?` — 🧑‍🍳 desc. empleado (${v.dctoPor}) −${fmt(v.dcto)}`:` — 🏷️ desc. ${v.dctoPct||''}% −${fmt(v.dcto)}`):''}</div>
       </div>
       <button class="del" style="background:#E7F0FF; color:#3568C9" onclick="imprimirVenta('${v.id}')">🖨</button>
       <button class="del" onclick="anularVenta('${v.id}')">✕</button>
@@ -1966,7 +1976,7 @@ function cierreHTML(day, detalle){
       ${d.transferA>0 ? `
       <tr><td>🤝 Abonos de fiados (transferencia)</td><td></td><td><b>${fmt(d.transferA)}</b></td></tr>` : ''}
       ${d.dctos>0 ? `
-      <tr><td>🧑‍🍳 Descuentos de empleados aplicados</td><td></td><td>-${fmt(d.dctos)}</td></tr>` : ''}
+      <tr><td>🏷️ Descuentos aplicados (empleados y −5%)</td><td></td><td>-${fmt(d.dctos)}</td></tr>` : ''}
       ${d.gastosDia.length ? `
       <tr><td>💸 Gastos/compras (efectivo)</td><td></td><td>-${fmt(d.gastosCash)}</td></tr>
       <tr><td>💸 Gastos/compras (tarjeta)</td><td></td><td>-${fmt(d.gastosCard)}</td></tr>` : ''}
@@ -2013,7 +2023,7 @@ function imprimirVenta(id){
     <table class="cierre-tabla">
       <tr><th>Artículo</th><th></th><th>Valor</th></tr>
       ${filas}
-      ${v.dcto ? `<tr><td>🧑‍🍳 Descuento empleado${v.dctoPor?' ('+v.dctoPor+')':''}</td><td></td><td>-${fmt(v.dcto)}</td></tr>` : ''}
+      ${v.dcto ? `<tr><td>${v.dctoPor?'🧑‍🍳 Descuento empleado ('+v.dctoPor+')':'🏷️ Descuento '+(v.dctoPct||'')+'%'}</td><td></td><td>-${fmt(v.dcto)}</td></tr>` : ''}
       <tr><td><b>TOTAL PAGADO</b></td><td></td><td><b>${fmt(v.total)}</b></td></tr>
       ${v.method==='cash' && v.paid!=null ? `
       <tr><td>Pagó con</td><td></td><td>${fmt(v.paid)}</td></tr>
