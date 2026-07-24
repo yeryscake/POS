@@ -83,7 +83,12 @@ internet; icono ☁️/📴 en el header):
   EN CAJA (efectivo)" y "DEBE HABER EN TARJETA" (ventas + abonos − gastos) — el
   número contra el que se cuenta la caja (sin contar el fondo fijo, que la app
   NO gestiona todavía). Botón **🖨 por venta individual** para reimprimir un
-  comprobante si el cliente lo pide después.
+  comprobante si el cliente lo pide después. El cierre **resumido** trae
+  botones para enviarlo por WhatsApp a Erica y Said (`CIERRE_WA`, patrón
+  data-wa; WhatsApp no permite envío 100% automático — abre el chat con el
+  mensaje listo). Mientras un cierre/comprobante está abierto,
+  `document.title` lleva la fecha para que el PDF se guarde ya nombrado
+  (se restaura al cerrar con `cerrarCierre()`).
 - **Fiados**: descuenta stock al momento, NO cuenta como venta hasta abonar.
   Abonos parciales/totales (efectivo/tarjeta) entran al día en que se abonan.
   La mercancía fiada SÍ cuenta en unidades/por-artículo del día en que salió.

@@ -424,11 +424,12 @@
 </div>
 
 <!-- Hoja de cierre -->
-<div class="sheet-bg" id="cierreBg" onclick="if(event.target===this)$('cierreBg').classList.remove('open')">
+<div class="sheet-bg" id="cierreBg" onclick="if(event.target===this)cerrarCierre()">
   <div class="sheet">
     <div id="cierreBody"></div>
+    <div id="cierreWa"></div>
     <button class="big purple" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
-    <button class="big ghost" onclick="$('cierreBg').classList.remove('open')" style="color:var(--cocoa-soft)">Cerrar</button>
+    <button class="big ghost" onclick="cerrarCierre()" style="color:var(--cocoa-soft)">Cerrar</button>
   </div>
 </div>
 
@@ -739,7 +740,7 @@ function seed(){
       it('Sprite Lata',2.50,'bebidas',1,24,null,12), it('Capri-Sun',1.00,'bebidas',1,24,null,40),
       it('Agua',2.00,'bebidas',1,24,null,40),
       it('Pony malta',2.50,'bebidas',1,24,null,0), it('Vive 100',3.00,'bebidas',1,24,null,0),
-      it('Maltin',2.50,'bebidas',1,24,null,24), it('TuttiFrutti',2.50,'bebidas',1,24,null,0),
+      it('Maltin',2.50,'bebidas',1,24,null,24), it('Del Valle',2.50,'bebidas',1,24,null,10),
     ],
     sales:[],
     fiados:[],
@@ -2001,11 +2002,57 @@ function cierreHTML(day, detalle){
       ${gastosFilas}
     </table>` : ''}` : ''}`;
 }
+/* Al guardar como PDF, iOS usa el título del documento como nombre de
+   archivo: mientras el cierre está abierto lleva la fecha, listo para
+   tocar "Guardar" sin renombrar nada. */
+const TITULO_ORIGINAL = document.title;
+function cerrarCierre(){
+  $('cierreBg').classList.remove('open');
+  document.title = TITULO_ORIGINAL;
+}
+/* Versión en texto del cierre resumido, para mandarlo por WhatsApp */
+const CIERRE_WA = [
+  {num:'5997804048', name:'Erica'},
+  {num:'5997015320', name:'Said'},
+];
+function cierreTexto(day){
+  const d = datosDia(day);
+  const L = [];
+  L.push(`🧾 CIERRE DEL DÍA — Yery'sCake Bonaire`);
+  L.push(day);
+  L.push('');
+  L.push(`💵 Efectivo (ventas): ${fmt(d.cash)}`);
+  L.push(`💳 Tarjeta (ventas): ${fmt(d.card)}`);
+  if(d.transfer>0) L.push(`🏦 Transferencias (ventas): ${fmt(d.transfer)}`);
+  if(d.cashA>0) L.push(`🤝 Abonos fiados (efectivo): ${fmt(d.cashA)}`);
+  if(d.cardA>0) L.push(`🤝 Abonos fiados (tarjeta): ${fmt(d.cardA)}`);
+  if(d.transferA>0) L.push(`🤝 Abonos fiados (transferencia): ${fmt(d.transferA)}`);
+  if(d.dctos>0) L.push(`🏷️ Descuentos aplicados: -${fmt(d.dctos)}`);
+  if(d.gastosCash>0) L.push(`💸 Gastos (efectivo): -${fmt(d.gastosCash)}`);
+  if(d.gastosCard>0) L.push(`💸 Gastos (tarjeta): -${fmt(d.gastosCard)}`);
+  L.push('');
+  L.push(`TOTAL DEL DÍA: ${fmt(d.total)}`);
+  L.push(`💰 DEBE HABER EN CAJA: ${fmt(d.cashNeto)}`);
+  L.push(`💳 DEBE HABER EN TARJETA: ${fmt(d.cardNeto)}`);
+  if(d.transferTotal>0) L.push(`🏦 DEBE HABER EN TRANSFERENCIAS: ${fmt(d.transferTotal)}`);
+  L.push('');
+  L.push(`Ventas: ${d.vs.length} · Unidades: ${d.units}${d.unitsFiado?` (${d.unitsFiado} fiadas)`:''}`);
+  return L.join('\n');
+}
 function mostrarCierre(detalle){
   const day = $('vFecha').value || hoyISO();
   const html = cierreHTML(day, detalle);
   $('cierreBody').innerHTML = html;
   $('printArea').innerHTML = html;
+  document.title = `Cierre ${detalle?'detallado':'resumido'} ${day} YerysCake`;
+  if(!detalle){
+    const enc = encodeURIComponent(cierreTexto(day));
+    $('cierreWa').innerHTML = CIERRE_WA.map(d=>
+      `<button class="big" style="margin-bottom:8px" data-wa="https://wa.me/${d.num}?text=${enc}">📲 Enviar a ${d.name}</button>`).join('');
+    $('cierreWa').querySelectorAll('[data-wa]').forEach(b=>{ b.onclick = () => { location.href = b.getAttribute('data-wa'); }; });
+  } else {
+    $('cierreWa').innerHTML = '';
+  }
   $('cierreBg').classList.add('open');
 }
 function verCierreResumen(){ mostrarCierre(false); }
@@ -2035,6 +2082,8 @@ function imprimirVenta(id){
     <p style="margin:14px 0 0; text-align:center; color:#777; font-weight:700">¡Gracias por su compra! 🍦</p>`;
   $('cierreBody').innerHTML = html;
   $('printArea').innerHTML = html;
+  $('cierreWa').innerHTML = '';
+  document.title = `Comprobante ${v.day} ${v.time.replace(':','.')} YerysCake`;
   $('cierreBg').classList.add('open');
 }
 
