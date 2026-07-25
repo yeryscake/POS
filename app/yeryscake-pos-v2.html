@@ -337,11 +337,17 @@
 
       <h2>Respaldo de datos</h2>
       <div class="form">
-        <button class="btn" onclick="exportarRespaldo()">⬇️ Descargar respaldo</button>
-        <button class="btn purple" onclick="$('respaldoInput').click()">⬆️ Restaurar respaldo</button>
+        <button class="btn" onclick="respaldarAhora()">☁️ Respaldar a la nube ahora</button>
+        <button class="btn purple" onclick="restaurarDesdeNube()">☁️ Restaurar desde la nube</button>
+      </div>
+      <p id="backupInfo" style="font-size:13px; font-weight:800; color:var(--ok); margin:4px 6px">☁️ …</p>
+      <p style="font-size:13px; color:var(--cocoa-soft); margin:4px 6px">La app se respalda sola en la nube cada ~10 minutos mientras haya internet (ventas, inventario, precios, fotos, empleados — todo). Si la tablet se daña o se borra el navegador, "Restaurar desde la nube" lo trae todo de vuelta en cualquier dispositivo.</p>
+      <div class="form">
+        <button class="btn" onclick="exportarRespaldo()">⬇️ Descargar respaldo (archivo)</button>
+        <button class="btn purple" onclick="$('respaldoInput').click()">⬆️ Restaurar desde archivo</button>
         <input type="file" id="respaldoInput" accept="application/json" style="display:none" onchange="importarRespaldo(event)">
       </div>
-      <p style="font-size:13px; color:var(--cocoa-soft); margin:4px 6px">Descarga este archivo de vez en cuando (Google Drive, email, USB). Si se borra el navegador o cambian de iPad, "Restaurar respaldo" trae de vuelta ventas, inventario, precios y fotos.</p>
+      <p style="font-size:13px; color:var(--cocoa-soft); margin:4px 6px">El respaldo por archivo sigue disponible como segunda copia (Google Drive, email, USB).</p>
     </div>
   </section>
 
@@ -622,6 +628,66 @@ async function cloudSync(){
 function cloudSyncDay(day){
   if(!cloudReady()) return;
   cloudDb.collection('days').doc(day).set({sales:S.sales.filter(v=>v.day===day), gastos:(S.gastos||[]).filter(g=>g.day===day), updatedAt:Date.now()}).catch(()=>{});
+}
+
+/* ── RESPALDO COMPLETO AUTOMÁTICO EN LA NUBE ──
+   Copia TODO (S + fotos personalizadas) a Firestore en bloques de texto
+   (el límite de Firestore es 1 MB por documento). Corre solo, como máximo
+   cada 10 minutos, en segundo plano. Si la tablet muere o Safari borra el
+   almacenamiento, Admin → "Restaurar desde la nube" lo trae todo de vuelta. */
+let lastBackup = 0, backupEnCurso = false;
+const BACKUP_MIN_MS = 10*60*1000;
+const BACKUP_CHUNK = 500000; // caracteres por documento (~0.5 MB)
+async function cloudBackup(force){
+  if(!cloudReady() || backupEnCurso) return;
+  if(!force && Date.now()-lastBackup < BACKUP_MIN_MS) return;
+  backupEnCurso = true;
+  try{
+    const payload = JSON.stringify({S, IMGS});
+    const n = Math.ceil(payload.length/BACKUP_CHUNK);
+    for(let i=0;i<n;i++){
+      await cloudDb.collection('backup').doc('chunk-'+i).set({data: payload.slice(i*BACKUP_CHUNK,(i+1)*BACKUP_CHUNK)});
+    }
+    await cloudDb.collection('backup').doc('meta').set({chunks:n, bytes:payload.length, updatedAt:Date.now(), day:hoyISO()});
+    lastBackup = Date.now();
+    pintarInfoRespaldo(lastBackup);
+  }catch(e){ /* sin internet o error: se reintenta en el próximo save */ }
+  backupEnCurso = false;
+}
+function pintarInfoRespaldo(ts){
+  const el = $('backupInfo'); if(!el) return;
+  el.textContent = ts ? '☁️ Último respaldo en la nube: ' + new Date(ts).toLocaleString('es') : '☁️ Aún no hay respaldo en la nube';
+}
+async function respaldarAhora(){
+  toast('☁️ Respaldando…');
+  await cloudBackup(true);
+  toast(lastBackup ? '✅ Respaldo en la nube completo' : '⚠️ No se pudo respaldar (¿sin internet?)');
+}
+async function restaurarDesdeNube(){
+  if(!cloudReady()){ toast('📴 Sin conexión con la nube'); return; }
+  try{
+    const metaDoc = await cloudDb.collection('backup').doc('meta').get();
+    const meta = metaDoc.data();
+    if(!meta || !meta.chunks){ toast('No hay respaldo en la nube todavía'); return; }
+    const fecha = new Date(meta.updatedAt).toLocaleString('es');
+    if(!confirm('Respaldo en la nube del:\n' + fecha + '\n\nEsto REEMPLAZA todos los datos actuales de esta tablet (ventas, inventario, precios, fotos) por los del respaldo. ¿Continuar?')) return;
+    if(!confirm('¿Seguro? Esta acción no se puede deshacer.')) return;
+    let payload = '';
+    for(let i=0;i<meta.chunks;i++){
+      const c = (await cloudDb.collection('backup').doc('chunk-'+i).get()).data();
+      if(!c || c.data==null) throw new Error('bloque ' + i + ' faltante');
+      payload += c.data;
+    }
+    const data = JSON.parse(payload);
+    if(!data || !data.S || !Array.isArray(data.S.items)) throw new Error('formato inválido');
+    S = data.S; IMGS = data.IMGS || {};
+    if(!S.codes) S.codes = {sup:'1234', adm:'2580'};
+    S.gastos = S.gastos || []; S.espera = S.espera || [];
+    migrar();
+    await save(); await saveImgs();
+    render();
+    toast('☁️ Respaldo restaurado por completo');
+  }catch(e){ toast('⚠️ No se pudo restaurar: ' + e.message); }
 }
 const abc = arr => arr.slice().sort((a,b)=>a.name.localeCompare(b.name,'es'));
 const fmt = n => '$' + n.toFixed(2);
@@ -1020,6 +1086,7 @@ async function save(){
   try{ await idbSet(KEY, S); }
   catch(e){ toast('⚠️ No se pudo guardar'); }
   cloudSync(); // en segundo plano: no espera respuesta, nunca bloquea la venta
+  cloudBackup(); // respaldo completo, como máximo cada 10 min
 }
 function exportarRespaldo(){
   const data = {app:'yeryscake-pos', version:1, exportedAt:new Date().toISOString(), S, IMGS};
@@ -1749,6 +1816,11 @@ function unlockAdmin(){
   if($('adminCodeIn').value === S.codes.adm){
     adminOn = true; $('adminCodeIn').value='';
     render(); toast('🔓 Modo administrador');
+    if(cloudReady()){
+      cloudDb.collection('backup').doc('meta').get()
+        .then(d=>pintarInfoRespaldo(d.data() ? d.data().updatedAt : 0))
+        .catch(()=>pintarInfoRespaldo(0));
+    } else pintarInfoRespaldo(0);
   } else toast('❌ Código incorrecto');
 }
 async function logoutAdmin(){
