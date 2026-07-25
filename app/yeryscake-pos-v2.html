@@ -366,6 +366,7 @@
       <input type="date" id="vFecha" onchange="render()">
       <button class="btn purple" onclick="verCierreResumen()">🧾 Cierre resumido</button>
       <button class="btn" style="background:var(--purple)" onclick="verCierreDetalle()">📋 Cierre detallado</button>
+      <button class="btn" style="background:var(--cyan)" onclick="verReporte('sem')">📈 Reportes</button>
       <button class="btn" style="background:var(--danger)" onclick="abrirGasto()">💸 Registrar gasto</button>
     </div>
     <div class="stats" id="vStats"></div>
@@ -2219,6 +2220,104 @@ function mostrarCierre(detalle){
 }
 function verCierreResumen(){ mostrarCierre(false); }
 function verCierreDetalle(){ mostrarCierre(true); }
+
+/* ── REPORTES HISTÓRICOS ── */
+function isoDe(dt){ return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); }
+function sumarDias(iso, n){ const p = iso.split('-').map(Number); return isoDe(new Date(p[0], p[1]-1, p[2]+n)); }
+function datosRango(desde, hasta){
+  const en = d => d >= desde && d <= hasta;
+  const vs = S.sales.filter(v=>en(v.day));
+  let cash=0, card=0, transfer=0;
+  vs.forEach(v=>{
+    if(v.method==='cash') cash += v.total;
+    else if(v.method==='card') card += v.total;
+    else if(v.method==='transfer') transfer += v.total;
+    else if(v.method==='mixed'){ cash += v.cashPart||0; card += v.cardPart||0; }
+  });
+  (S.fiados||[]).forEach(f=>(f.abonos||[]).forEach(a=>{
+    if(!en(a.day)) return;
+    if(a.method==='cash') cash += a.monto;
+    else if(a.method==='card') card += a.monto;
+    else if(a.method==='transfer') transfer += a.monto;
+  }));
+  const total = cash + card + transfer;
+  const gastos = (S.gastos||[]).filter(g=>en(g.day)).reduce((s,g)=>s+g.monto,0);
+  const dctos = vs.reduce((a,v)=>a+(v.dcto||0),0);
+  const porEmpleado = {};
+  vs.forEach(v=>{ if(v.dcto && v.dctoPor){ porEmpleado[v.dctoPor] = (porEmpleado[v.dctoPor]||0) + v.dcto; } });
+  const units = vs.reduce((a,v)=>a+v.units,0) + (S.fiados||[]).filter(f=>en(f.day)).reduce((a,f)=>a+f.units,0);
+  const porItem = {};
+  const porDia = {};
+  vs.forEach(v=>{
+    if(!porDia[v.day]) porDia[v.day] = {total:0, ventas:0};
+    porDia[v.day].total += v.total; porDia[v.day].ventas++;
+    v.items.forEach(i=>{
+      if(!porItem[i.base]) porItem[i.base] = {qty:0, monto:0};
+      porItem[i.base].qty += i.qty; porItem[i.base].monto += i.qty*i.price;
+    });
+  });
+  return {vs, cash, card, transfer, total, gastos, dctos, porEmpleado, units, porItem, porDia};
+}
+function verReporte(tipo){
+  const hoy = hoyISO();
+  const p = hoy.split('-').map(Number);
+  const diaSem = (new Date(p[0], p[1]-1, p[2]).getDay() + 6) % 7; // 0 = lunes
+  let desde, hasta, titulo;
+  if(tipo==='sem'){ desde = sumarDias(hoy, -diaSem); hasta = hoy; titulo = 'Esta semana'; }
+  else if(tipo==='semAnt'){ hasta = sumarDias(hoy, -diaSem-1); desde = sumarDias(hasta, -6); titulo = 'Semana pasada'; }
+  else if(tipo==='mes'){ desde = hoy.slice(0,8)+'01'; hasta = hoy; titulo = 'Este mes'; }
+  else { const fin = new Date(p[0], p[1]-1, 0); hasta = isoDe(fin); desde = hasta.slice(0,8)+'01'; titulo = 'Mes pasado'; }
+  const d = datosRango(desde, hasta);
+  // período anterior equivalente (misma cantidad de días, justo antes)
+  const dias = Math.round((new Date(hasta) - new Date(desde))/86400000) + 1;
+  const antHasta = sumarDias(desde, -1), antDesde = sumarDias(antHasta, -(dias-1));
+  const ant = datosRango(antDesde, antHasta);
+  const cambio = ant.total > 0 ? ((d.total-ant.total)/ant.total*100) : null;
+  const diasActivos = Object.keys(d.porDia).length;
+  const mejor = Object.entries(d.porDia).sort((a,b)=>b[1].total-a[1].total)[0];
+  const topProds = Object.entries(d.porItem).sort((a,b)=>b[1].qty-a[1].qty).slice(0,8);
+  const chips = [['sem','Esta semana'],['semAnt','Semana pasada'],['mes','Este mes'],['mesAnt','Mes pasado']]
+    .map(([t,n])=>`<button class="chip ${t===tipo?'on':''}" onclick="verReporte('${t}')">${n}</button>`).join(' ');
+  const html = `
+    <div style="text-align:center; margin-bottom:10px">${chips}</div>
+    <h3 style="margin:0">📈 Reporte — ${titulo} — Yery'sCake Bonaire</h3>
+    <p style="margin:4px 0 12px; color:#777; font-weight:700">${desde} al ${hasta}</p>
+    <table class="cierre-tabla">
+      <tr><th>Resumen del período</th><th></th><th></th></tr>
+      <tr><td><b>TOTAL VENDIDO</b></td><td></td><td><b>${fmt(d.total)}</b></td></tr>
+      ${cambio!=null ? `
+      <tr><td>${cambio>=0?'📈':'📉'} vs período anterior (${antDesde} al ${antHasta}: ${fmt(ant.total)})</td><td></td><td><b style="color:${cambio>=0?'var(--ok)':'var(--danger)'}">${cambio>=0?'+':''}${cambio.toFixed(1)}%</b></td></tr>` : ''}
+      <tr><td>💵 Efectivo cobrado</td><td></td><td>${fmt(d.cash)}</td></tr>
+      <tr><td>💳 Tarjeta cobrada</td><td></td><td>${fmt(d.card)}</td></tr>
+      ${d.transfer>0 ? `<tr><td>🏦 Transferencias</td><td></td><td>${fmt(d.transfer)}</td></tr>` : ''}
+      ${d.gastos>0 ? `<tr><td>💸 Gastos/compras</td><td></td><td>-${fmt(d.gastos)}</td></tr>` : ''}
+      ${d.dctos>0 ? `<tr><td>🏷️ Descuentos aplicados</td><td></td><td>-${fmt(d.dctos)}</td></tr>` : ''}
+      <tr><td>Ventas realizadas</td><td></td><td>${d.vs.length}</td></tr>
+      <tr><td>Unidades vendidas</td><td></td><td>${d.units}</td></tr>
+      <tr><td>Promedio por día (${diasActivos} días con ventas)</td><td></td><td>${fmt(diasActivos ? d.total/diasActivos : 0)}</td></tr>
+      ${mejor ? `<tr><td>⭐ Mejor día</td><td>${mejor[0]}</td><td>${fmt(mejor[1].total)}</td></tr>` : ''}
+    </table>
+    ${topProds.length ? `
+    <table class="cierre-tabla">
+      <tr><th>Más vendidos</th><th>Cant.</th><th>Valor</th></tr>
+      ${topProds.map(([n,x])=>`<tr><td>${n}</td><td>${x.qty}</td><td>${fmt(x.monto)}</td></tr>`).join('')}
+    </table>` : ''}
+    ${Object.keys(d.porEmpleado).length ? `
+    <table class="cierre-tabla">
+      <tr><th>Descuentos por empleado</th><th></th><th></th></tr>
+      ${Object.entries(d.porEmpleado).map(([n,m])=>`<tr><td>🧑‍🍳 ${n}</td><td></td><td>-${fmt(m)}</td></tr>`).join('')}
+    </table>` : ''}
+    ${Object.keys(d.porDia).length ? `
+    <table class="cierre-tabla">
+      <tr><th>Día por día</th><th>Ventas</th><th>Total</th></tr>
+      ${Object.keys(d.porDia).sort().map(day=>`<tr><td>${day}</td><td>${d.porDia[day].ventas}</td><td>${fmt(d.porDia[day].total)}</td></tr>`).join('')}
+    </table>` : '<div class="vacio">Sin ventas en este período</div>'}`;
+  $('cierreBody').innerHTML = html;
+  $('printArea').innerHTML = html;
+  $('cierreWa').innerHTML = '';
+  document.title = `Reporte ${desde} a ${hasta} YerysCake`;
+  $('cierreBg').classList.add('open');
+}
 
 /* Comprobante de una venta individual (si el cliente lo pide después) */
 function imprimirVenta(id){
