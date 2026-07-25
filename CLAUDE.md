@@ -86,14 +86,19 @@ internet; icono ☁️/📴 en el header):
   + visibilitychange). Dos cierres: **resumido** (solo totales, para archivar) y
   **detallado** (por artículo + gastos). El cierre siempre muestra "DEBE HABER
   EN CAJA (efectivo)" y "DEBE HABER EN TARJETA" (ventas + abonos − gastos) — el
-  número contra el que se cuenta la caja (sin contar el fondo fijo, que la app
-  NO gestiona todavía). Botón **🖨 por venta individual** para reimprimir un
+  número contra el que se cuenta la caja, incluyendo el **fondo de caja fijo**
+  (`S.fondo`, configurable en Admin; se desglosa como línea propia). Botón **🖨 por venta individual** para reimprimir un
   comprobante si el cliente lo pide después. El cierre **resumido** trae
   botones para enviarlo por WhatsApp a Erica y Said (`CIERRE_WA`, patrón
   data-wa; WhatsApp no permite envío 100% automático — abre el chat con el
   mensaje listo). Mientras un cierre/comprobante está abierto,
   `document.title` lleva la fecha para que el PDF se guarde ya nombrado
   (se restaura al cerrar con `cerrarCierre()`).
+- **Reportes históricos**: botón "📈 Reportes" en Ventas — esta semana /
+  semana pasada / este mes / mes pasado (semanas lunes-domingo), con % de
+  cambio vs el período anterior equivalente, desglose por método, gastos,
+  descuentos por empleado, promedio por día activo, mejor día, top 8
+  productos y tabla día por día (`datosRango`, `verReporte`). Imprimible.
 - **Fiados**: descuenta stock al momento, NO cuenta como venta hasta abonar.
   Abonos parciales/totales (efectivo/tarjeta) entran al día en que se abonan.
   La mercancía fiada SÍ cuenta en unidades/por-artículo del día en que salió.
@@ -103,7 +108,11 @@ internet; icono ☁️/📴 en el header):
   defecto: sup `1234`, adm `2580`.
 - **Fotos**: DEFAULT_IMGS embebidas por nombre (con alias en `A` para artículos
   renombrados); el admin puede reemplazar desde cámara/galería (IMGS por id).
-- **Respaldo**: Admin → exportar/importar `.json` completo.
+- **Respaldo**: automático completo a Firestore (`backup/meta` + `backup/chunk-N`,
+  bloques de ~0.5 MB por el límite de 1 MB/doc; S + IMGS, throttled cada 10 min
+  desde `save()`). Admin → "Respaldar ahora" (forzado) y "Restaurar desde la
+  nube" (doble confirmación, aplica migraciones). El exportar/importar `.json`
+  sigue como segunda copia.
 - **Migración**: `migrar()` con `S.priceV` (va en **13**) — cambios de precios/
   artículos/estructura sin borrar datos. Toda alteración del catálogo o del
   modelo debe ir como nueva versión aquí Y reflejarse en `seed()`.
@@ -123,7 +132,8 @@ S = {
            cashPart, cardPart, dcto, dctoPor}],
   fiados: [{id, name, day, time, items, total, units, dcto, abonos:[{id,day,time,monto,method}]}],
   gastos: [{id, day, time, desc, monto, method:'cash'|'card', foto|null}],
-  espera: [{id, time, ticket:[...líneas de ticket...]}]   // tickets en pausa
+  espera: [{id, time, ticket:[...líneas de ticket...]}],  // tickets en pausa
+  fondo: 0   // fondo de caja fijo (se suma al DEBE HABER EN CAJA)
 }
 // CATS (en orden de prioridad): desayunos, cups, cakes, batidos, bebidas, waffles, cafe, jugos, paletas, varios
 // TOPCATS = ['paletas','cups','waffles']
