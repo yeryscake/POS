@@ -69,6 +69,11 @@ internet; icono ☁️/📴 en el header):
   (`S.empleados`, códigos ocultos con toque para ver/ocultar, se ocultan al
   cerrar sesión admin). Empleados actuales: Erica 0207, Dahiana 1312,
   Wilder 8025, Said 4570.
+- **Tickets en espera**: botón "⏸️ Poner en espera" en el ticket — guarda el
+  pedido de un cliente indeciso (persistido en `S.espera`, sobrevive cierres
+  de la app) y deja el ticket limpio para atender al siguiente. Las fichas
+  ámbar sobre el ticket muestran hora, unidades, total y resumen; un toque
+  retoma (si hay ticket activo, se intercambian), la ✕ borra con confirmación.
 - **Gastos/compras de caja**: botón en Ventas; descripción, monto, método y foto
   de factura opcional (comprimida). Se descuentan del efectivo/tarjeta neto del
   cierre. Eliminar gasto pide código de supervisor.
@@ -117,7 +122,8 @@ S = {
            units, method:'cash'|'card'|'transfer'|'mixed', paid, change,
            cashPart, cardPart, dcto, dctoPor}],
   fiados: [{id, name, day, time, items, total, units, dcto, abonos:[{id,day,time,monto,method}]}],
-  gastos: [{id, day, time, desc, monto, method:'cash'|'card', foto|null}]
+  gastos: [{id, day, time, desc, monto, method:'cash'|'card', foto|null}],
+  espera: [{id, time, ticket:[...líneas de ticket...]}]   // tickets en pausa
 }
 // CATS (en orden de prioridad): desayunos, cups, cakes, batidos, bebidas, waffles, cafe, jugos, paletas, varios
 // TOPCATS = ['paletas','cups','waffles']

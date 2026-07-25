@@ -94,6 +94,16 @@
   .big:disabled{opacity:.4;}
   .big.purple{background:var(--purple);}
   .big.ghost{background:transparent; color:var(--danger); font-size:14px; padding:10px;}
+  .big.espera{background:#FFF3D6; color:#B87A00; font-size:15px; padding:12px; margin-top:8px;}
+  .big.espera:disabled{opacity:.35;}
+  /* tickets en espera */
+  #esperaBar{display:flex; flex-direction:column; gap:6px; margin-bottom:10px;}
+  .esp-chip{display:flex; align-items:center; gap:8px; background:#FFF3D6; border:2px solid #F2D49B;
+    border-radius:12px; padding:8px 10px; font-size:13px; font-weight:800; color:#8a6100;}
+  .esp-chip .inf{flex:1; text-align:left; background:none; border:none; font:inherit; color:inherit; padding:0;}
+  .esp-chip .inf small{display:block; font-weight:600; color:#B08A3E; font-size:11px;}
+  .esp-chip .del{border:none; background:#FFE9E5; color:var(--danger); border-radius:8px;
+    width:28px; height:28px; font-weight:800; flex-shrink:0;}
   .vacio{color:var(--cocoa-soft); text-align:center; padding:24px 8px; font-size:14px;}
 
   /* sheets / modales */
@@ -215,9 +225,11 @@
       </div>
       <div class="ticket">
         <h3>🧾 Ticket</h3>
+        <div id="esperaBar"></div>
         <div id="tkItems"></div>
         <div class="tk-total"><span>Total</span><span id="tkTotal">$0.00</span></div>
         <button class="big" id="btnCobrar" onclick="abrirCobro()" disabled>Cobrar</button>
+        <button class="big espera" id="btnEspera" onclick="ponerEnEspera()" disabled>⏸️ Poner en espera</button>
         <button class="big ghost" onclick="vaciarTicket()">Vaciar ticket</button>
       </div>
     </div>
@@ -744,7 +756,8 @@ function seed(){
     ],
     sales:[],
     fiados:[],
-    gastos:[]
+    gastos:[],
+    espera:[]
   };
 }
 
@@ -977,6 +990,7 @@ async function load(){
   }
   if(!S.codes) S.codes = {sup:'1234', adm:'2580'};
   S.gastos = S.gastos || [];
+  S.espera = S.espera || [];
   if(migrar()) await save();
   ultimoDia = hoyISO();
   $('vFecha').value = ultimoDia;
@@ -1029,6 +1043,7 @@ async function importarRespaldo(ev){
     // normalizaciones y migraciones que al arrancar la app
     if(!S.codes) S.codes = {sup:'1234', adm:'2580'};
     S.gastos = S.gastos || [];
+    S.espera = S.espera || [];
     migrar();
     await save(); await saveImgs();
     render();
@@ -1234,6 +1249,7 @@ function tkTotal(){ return ticket.reduce((a,i)=>a+i.price*i.qty,0); }
 function renderTicket(){
   $('tkTotal').textContent = fmt(tkTotal());
   $('btnCobrar').disabled = ticket.length===0;
+  $('btnEspera').disabled = ticket.length===0;
   $('tkItems').innerHTML = ticket.length ? ticket.map(i=>`
     <div class="tk-item">
       <div class="n">${i.name}${i.tops.length?`<div class="top">+ ${i.tops.join(', ')}</div>`:''}</div>
@@ -1243,6 +1259,56 @@ function renderTicket(){
       <b style="min-width:56px;text-align:right">${fmt(i.price*i.qty)}</b>
     </div>`).join('')
     : '<div class="vacio">Toca un artículo para empezar</div>';
+  renderEspera();
+}
+
+/* ── TICKETS EN ESPERA (cliente indeciso, atender al siguiente) ── */
+function renderEspera(){
+  const lista = S && S.espera ? S.espera : [];
+  $('esperaBar').innerHTML = lista.map(e=>{
+    const total = e.ticket.reduce((a,i)=>a+i.price*i.qty,0);
+    const unidades = e.ticket.reduce((a,i)=>a+i.qty,0);
+    const resumen = e.ticket.map(i=>i.qty+'× '+i.name).join(', ');
+    return `<div class="esp-chip">
+      <button class="inf" onclick="retomarEspera('${e.id}')">⏸️ En espera desde ${e.time} — ${unidades} art · ${fmt(total)}
+        <small>${resumen.length>60 ? resumen.slice(0,60)+'…' : resumen}</small>
+      </button>
+      <button class="del" onclick="quitarEspera('${e.id}')">✕</button>
+    </div>`;
+  }).join('');
+}
+async function ponerEnEspera(){
+  if(!ticket.length) return;
+  S.espera = S.espera || [];
+  S.espera.push({id:uid(),
+    time:new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'}),
+    ticket});
+  ticket = [];
+  await save(); render();
+  toast('⏸️ Ticket guardado en espera');
+}
+async function retomarEspera(id){
+  const idx = (S.espera||[]).findIndex(e=>e.id===id);
+  if(idx<0) return;
+  const e = S.espera[idx];
+  S.espera.splice(idx,1);
+  if(ticket.length){ // el ticket actual no se pierde: se intercambian
+    S.espera.push({id:uid(),
+      time:new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'}),
+      ticket});
+    toast('🔄 Tickets intercambiados');
+  } else {
+    toast('▶️ Ticket retomado');
+  }
+  ticket = e.ticket;
+  await save(); render();
+}
+async function quitarEspera(id){
+  const e = (S.espera||[]).find(x=>x.id===id);
+  if(!e) return;
+  if(!confirm('¿Borrar este ticket en espera? (' + e.ticket.map(i=>i.qty+'× '+i.name).join(', ') + ')')) return;
+  S.espera = S.espera.filter(x=>x.id!==id);
+  await save(); render();
 }
 
 /* ── COBRO ── */
