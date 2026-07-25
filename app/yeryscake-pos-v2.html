@@ -316,6 +316,14 @@
       </div>
       <p style="font-size:13px; color:var(--cocoa-soft); margin:4px 6px">El código de <b>supervisor</b> anula ventas. El código de <b>admin</b> abre esta zona.</p>
 
+      <h2>💰 Fondo de caja fijo</h2>
+      <div class="form">
+        <label style="font-weight:800">$</label>
+        <input type="number" inputmode="decimal" step="0.01" min="0" id="fondoIn" style="width:120px">
+        <button class="btn purple" onclick="guardarFondo()">Guardar fondo</button>
+      </div>
+      <p style="font-size:13px; color:var(--cocoa-soft); margin:4px 6px">El dinero fijo que siempre queda en la caja para dar vueltos (billetes y monedas de base). El cierre lo suma al "DEBE HABER EN CAJA" para que el conteo cuadre exacto.</p>
+
       <h2>🧑‍🍳 Empleados (descuento 12%)</h2>
       <div class="form">
         <input type="text" id="empNombre" placeholder="Nombre del empleado">
@@ -682,7 +690,7 @@ async function restaurarDesdeNube(){
     if(!data || !data.S || !Array.isArray(data.S.items)) throw new Error('formato inválido');
     S = data.S; IMGS = data.IMGS || {};
     if(!S.codes) S.codes = {sup:'1234', adm:'2580'};
-    S.gastos = S.gastos || []; S.espera = S.espera || [];
+    S.gastos = S.gastos || []; S.espera = S.espera || []; S.fondo = S.fondo || 0;
     migrar();
     await save(); await saveImgs();
     render();
@@ -823,7 +831,8 @@ function seed(){
     sales:[],
     fiados:[],
     gastos:[],
-    espera:[]
+    espera:[],
+    fondo:0
   };
 }
 
@@ -1057,6 +1066,7 @@ async function load(){
   if(!S.codes) S.codes = {sup:'1234', adm:'2580'};
   S.gastos = S.gastos || [];
   S.espera = S.espera || [];
+  S.fondo = S.fondo || 0;
   if(migrar()) await save();
   ultimoDia = hoyISO();
   $('vFecha').value = ultimoDia;
@@ -1111,6 +1121,7 @@ async function importarRespaldo(ev){
     if(!S.codes) S.codes = {sup:'1234', adm:'2580'};
     S.gastos = S.gastos || [];
     S.espera = S.espera || [];
+    S.fondo = S.fondo || 0;
     migrar();
     await save(); await saveImgs();
     render();
@@ -1874,6 +1885,7 @@ function renderAdmin(){
   $('adminLock').style.display = adminOn ? 'none' : '';
   $('adminPanel').style.display = adminOn ? '' : 'none';
   if(!adminOn) return;
+  if(document.activeElement !== $('fondoIn')) $('fondoIn').value = (S.fondo||0) ? S.fondo : '';
   $('fCat').innerHTML = CATS.map(c=>`<option value="${c.id}" ${c.id===admCat?'selected':''}>${c.nombre}</option>`).join('');
   $('fColores').innerHTML = PALETTE.map(c=>
     `<button class="cop ${c===selColor?'on':''}" style="background:${c}" onclick="selColor='${c}';renderAdmin()"></button>`).join('');
@@ -2018,6 +2030,13 @@ async function guardarCodigos(){
   S.codes = {sup:s, adm:a};
   await save(); toast('Códigos guardados');
 }
+async function guardarFondo(){
+  const v = parseFloat($('fondoIn').value);
+  if(isNaN(v) || v < 0){ toast('Escribe un monto válido (0 o más)'); return; }
+  S.fondo = Math.round(v*100)/100;
+  await save(); render();
+  toast('💰 Fondo de caja: ' + fmt(S.fondo));
+}
 
 /* ── VENTAS Y CIERRE ── */
 function datosDia(day){
@@ -2049,7 +2068,9 @@ function datosDia(day){
   const cardNeto = card + cardA - gastosCard;
   const dctos = vs.reduce((a,v)=>a+(v.dcto||0),0) + fsDia.reduce((a,v)=>a+(v.dcto||0),0);
   const transferTotal = transfer + transferA;
-  return {vs, cash, card, transfer, cashA, cardA, transferA, transferTotal, abonosDia, total, units, unitsFiado, porItem, gastosDia, gastosCash, gastosCard, cashNeto, cardNeto, dctos};
+  const fondo = S.fondo || 0;
+  const cashCaja = cashNeto + fondo; // lo que debe haber físicamente en la caja
+  return {vs, cash, card, transfer, cashA, cardA, transferA, transferTotal, abonosDia, total, units, unitsFiado, porItem, gastosDia, gastosCash, gastosCard, cashNeto, cardNeto, dctos, fondo, cashCaja};
 }
 function metodoLabel(m){ return m==='cash'?'💵 Efectivo' : m==='card'?'💳 Tarjeta' : m==='transfer'?'🏦 Transferencia' : '🔀 Mixto'; }
 function renderVentas(){
@@ -2065,7 +2086,7 @@ function renderVentas(){
     <div class="stat"><b>${fmt(d.cashA + d.cardA)}</b><span>🤝 Abonos fiados</span></div>
     ${d.gastosDia.length ? `
     <div class="stat" style="color:var(--danger)"><b>-${fmt(d.gastosCash + d.gastosCard)}</b><span>💸 Gastos/compras</span></div>` : ''}
-    <div class="stat"><b>${fmt(d.cashNeto)}</b><span>💰 Debe haber en caja</span></div>
+    <div class="stat"><b>${fmt(d.cashCaja)}</b><span>💰 Debe haber en caja${d.fondo>0?' (con fondo)':''}</span></div>
     <div class="stat"><b>${d.vs.length}</b><span>Ventas</span></div>
     <div class="stat"><b>${d.units}</b><span>Unidades salidas${d.unitsFiado?` (${d.unitsFiado} fiadas)`:''}</span></div>
     <div class="stat"><b style="font-size:15px">${top?top[0]+' ('+top[1].qty+')':'—'}</b><span>Más vendido</span></div>`;
@@ -2120,7 +2141,9 @@ function cierreHTML(day, detalle){
       <tr><td>💸 Gastos/compras (efectivo)</td><td></td><td>-${fmt(d.gastosCash)}</td></tr>
       <tr><td>💸 Gastos/compras (tarjeta)</td><td></td><td>-${fmt(d.gastosCard)}</td></tr>` : ''}
       <tr><td><b>TOTAL DEL DÍA (ventas)</b></td><td></td><td><b>${fmt(d.total)}</b></td></tr>
-      <tr><td><b>💰 DEBE HABER EN CAJA (efectivo)</b><br><span style="font-weight:600;font-size:12px;color:#777">ventas + abonos − gastos, sin contar el fondo fijo</span></td><td></td><td><b>${fmt(d.cashNeto)}</b></td></tr>
+      ${d.fondo>0 ? `
+      <tr><td>💰 Fondo de caja fijo</td><td></td><td>${fmt(d.fondo)}</td></tr>` : ''}
+      <tr><td><b>💰 DEBE HABER EN CAJA (efectivo)</b><br><span style="font-weight:600;font-size:12px;color:#777">${d.fondo>0 ? 'ventas + abonos − gastos + fondo fijo' : 'ventas + abonos − gastos (sin fondo fijo configurado)'}</span></td><td></td><td><b>${fmt(d.cashCaja)}</b></td></tr>
       <tr><td><b>💳 DEBE HABER EN TARJETA</b></td><td></td><td><b>${fmt(d.cardNeto)}</b></td></tr>
       ${d.transferTotal>0 ? `
       <tr><td><b>🏦 DEBE HABER EN TRANSFERENCIAS</b><br><span style="font-weight:600;font-size:12px;color:#777">verificar en la cuenta bancaria</span></td><td></td><td><b>${fmt(d.transferTotal)}</b></td></tr>` : ''}
@@ -2170,7 +2193,8 @@ function cierreTexto(day){
   if(d.gastosCard>0) L.push(`💸 Gastos (tarjeta): -${fmt(d.gastosCard)}`);
   L.push('');
   L.push(`TOTAL DEL DÍA: ${fmt(d.total)}`);
-  L.push(`💰 DEBE HABER EN CAJA: ${fmt(d.cashNeto)}`);
+  if(d.fondo>0) L.push(`💰 Fondo de caja fijo: ${fmt(d.fondo)}`);
+  L.push(`💰 DEBE HABER EN CAJA: ${fmt(d.cashCaja)}`);
   L.push(`💳 DEBE HABER EN TARJETA: ${fmt(d.cardNeto)}`);
   if(d.transferTotal>0) L.push(`🏦 DEBE HABER EN TRANSFERENCIAS: ${fmt(d.transferTotal)}`);
   L.push('');
