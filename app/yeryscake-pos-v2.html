@@ -65,7 +65,9 @@
   .tile:active{transform:scale(.96);}
   .tile{-webkit-touch-callout:none;}
   /* modo reorganizar (mantener presionado) */
-  .grid-editing #gridItems .tile{animation:wiggle .32s infinite; touch-action:none;}
+  .grid-editing #gridItems .tile,
+  .grid-editing #catBar button{animation:wiggle .32s infinite; touch-action:none;}
+  .grid-editing #catBar button.drag{opacity:.55; transform:scale(1.1); animation:none !important;}
   .grid-editing #gridItems .tile:nth-child(2n){animation-delay:.16s;}
   @keyframes wiggle{ 0%,100%{transform:rotate(-1.4deg)} 50%{transform:rotate(1.4deg)} }
   .tile.drag{opacity:.55; transform:scale(1.1); animation:none !important; box-shadow:0 8px 20px rgba(58,42,51,.35);}
@@ -572,16 +574,16 @@ const PALETTE = ['#FF6B81','#FFB84D','#FFE066','#7BD88F','#3FBFA8','#6BB8FF','#B
    en la tablet y viven en S.cats. CATS siempre apunta a S.cats una vez
    cargados los datos (ver load()). */
 const CATS_DEFAULT = [
-  {id:'desayunos', nombre:'Desayunos',        color:'#FFE066'},
-  {id:'cups',      nombre:'Bolocups & Cremas',color:'#B58CFF'},
-  {id:'cakes',     nombre:'Cakes & Tortas',   color:'#8A5A44'},
-  {id:'batidos',   nombre:'Batidos & Shakes', color:'#3FBFA8'},
-  {id:'bebidas',   nombre:'Bebidas',          color:'#6BB8FF'},
-  {id:'waffles',   nombre:'Waffles & Antojitos', color:'#FFB84D'},
-  {id:'cafe',      nombre:'Café',             color:'#A9745B'},
-  {id:'jugos',     nombre:'Jugos Naturales',  color:'#7BD88F'},
-  {id:'paletas',   nombre:'Paletas',          color:'#FF8FB1'},
-  {id:'varios',    nombre:'Varios',           color:'#8F7383'},
+  {id:'desayunos', nombre:'Desayunos',        color:'#FFE066'},  // 53.8 u/día
+  {id:'cups',      nombre:'Bolocups & Cremas',color:'#B58CFF'},  // 25.1
+  {id:'cakes',     nombre:'Cakes & Tortas',   color:'#8A5A44'},  // 20.6
+  {id:'waffles',   nombre:'Waffles & Antojitos', color:'#FFB84D'}, // 20.0
+  {id:'bebidas',   nombre:'Bebidas',          color:'#6BB8FF'},  // 17.4
+  {id:'jugos',     nombre:'Jugos Naturales',  color:'#7BD88F'},  // 8.8
+  {id:'batidos',   nombre:'Batidos & Shakes', color:'#3FBFA8'},  // 8.5
+  {id:'cafe',      nombre:'Café',             color:'#A9745B'},  // 5.5
+  {id:'paletas',   nombre:'Paletas',          color:'#FF8FB1'},  // 3.5
+  {id:'varios',    nombre:'Varios',           color:'#8F7383'},  // 3.0
 ];
 let CATS = CATS_DEFAULT.map(c=>({...c}));
 const CAT_VARIOS = 'varios'; // categoría especial: trae el botón de precio libre
@@ -731,7 +733,7 @@ function aplicarCats(){
 function seed(){
   return {
     codes:{sup:'1234', adm:'2580'},
-    priceV:14,
+    priceV:15,
     cats: CATS_DEFAULT.map(c=>({...c})),
     empleados:[
       {name:'Erica', code:'0207'},
@@ -1042,6 +1044,18 @@ function migrar(){
     });
     S.priceV = 14;
   }
+  if((S.priceV||1) < 15){
+    mchanged = true;
+    // Orden por uso real (18 días de ventas, jul 2026): las categorías que
+    // más se tocan quedan primero. De aquí en adelante se reordena a mano
+    // desde la tablet (arrastrando o con ▲▼ en Admin).
+    const orden = CATS_DEFAULT.map(c=>c.id);
+    S.cats = (S.cats||[]).slice().sort((a,b)=>{
+      const ia = orden.indexOf(a.id), ib = orden.indexOf(b.id);
+      return (ia<0?999:ia) - (ib<0?999:ib); // las creadas en la tablet van al final
+    });
+    S.priceV = 15;
+  }
   return mchanged;
 }
 
@@ -1192,7 +1206,11 @@ function render(){
 }
 function renderCats(){
   $('catBar').innerHTML = CATS.map(c=>
-    `<button class="${c.id===curCat?'act':''}" onclick="curCat='${c.id}';render()">${c.nombre}</button>`).join('');
+    `<button class="${c.id===curCat?'act':''}" data-cat="${c.id}" onpointerdown="catDown(event)" onclick="tapCat('${c.id}')">${esc(c.nombre)}</button>`).join('');
+}
+function tapCat(id){
+  if(gridEdit) return; // en modo reorganizar el toque no cambia de categoría
+  curCat = id; render();
 }
 function ordenGrid(list){
   return list.slice().sort((a,b)=>{
@@ -1226,11 +1244,22 @@ function renderGrid(){
 }
 
 /* ── REORGANIZAR LA GRILLA (mantener presionado, como en iPhone) ── */
-let gridEdit = false, dragEl = null, lpTimer = null, lpStart = null;
+let gridEdit = false, dragEl = null, dragCont = null, dragSel = '', lpTimer = null, lpStart = null;
 function gridDown(ev, id){
   if(gridEdit){
     const el = ev.target.closest('[data-id]');
-    if(el){ dragEl = el; el.classList.add('drag'); ev.preventDefault(); }
+    if(el){ dragEl = el; dragCont = $('gridItems'); dragSel = '[data-id]'; el.classList.add('drag'); ev.preventDefault(); }
+    return;
+  }
+  lpStart = {x:ev.clientX, y:ev.clientY};
+  clearTimeout(lpTimer);
+  lpTimer = setTimeout(entrarEditGrid, 550);
+}
+/* Mismo gesto sobre la franja de categorías: mantener presionado y arrastrar */
+function catDown(ev){
+  if(gridEdit){
+    const el = ev.target.closest('[data-cat]');
+    if(el){ dragEl = el; dragCont = $('catBar'); dragSel = '[data-cat]'; el.classList.add('drag'); ev.preventDefault(); }
     return;
   }
   lpStart = {x:ev.clientX, y:ev.clientY};
@@ -1242,7 +1271,7 @@ function entrarEditGrid(){
   gridEdit = true;
   document.body.classList.add('grid-editing');
   $('btnListoGrid').style.display = '';
-  toast('✋ Arrastra los productos al orden que quieras');
+  toast('✋ Arrastra los productos y las categorías al orden que quieras');
 }
 async function salirEditGrid(){
   gridEdit = false;
@@ -1252,6 +1281,10 @@ async function salirEditGrid(){
     const f = S.items.find(x=>x.id===el.dataset.id);
     if(f) f.pos = i;
   });
+  const ordenCats = [...$('catBar').querySelectorAll('[data-cat]')].map(el=>el.dataset.cat);
+  if(ordenCats.length === S.cats.length){
+    S.cats.sort((a,b)=>ordenCats.indexOf(a.id) - ordenCats.indexOf(b.id));
+  }
   await save(); render();
   toast('✅ Orden guardado');
 }
@@ -1259,21 +1292,21 @@ document.addEventListener('pointermove', e=>{
   if(lpTimer && lpStart && Math.hypot(e.clientX-lpStart.x, e.clientY-lpStart.y) > 12){
     clearTimeout(lpTimer); lpTimer = null; // estaba deslizando, no reorganizando
   }
-  if(!dragEl) return;
+  if(!dragEl || !dragCont) return;
   const bajo = document.elementFromPoint(e.clientX, e.clientY);
-  const target = bajo && bajo.closest ? bajo.closest('#gridItems [data-id]') : null;
-  if(!target || target===dragEl) return;
-  const kids = [...$('gridItems').querySelectorAll('[data-id]')];
+  const target = bajo && bajo.closest ? bajo.closest(dragSel) : null;
+  if(!target || target===dragEl || target.parentElement!==dragCont) return;
+  const kids = [...dragCont.querySelectorAll(dragSel)];
   if(kids.indexOf(dragEl) < kids.indexOf(target)) target.after(dragEl);
   else target.before(dragEl);
 });
 document.addEventListener('pointerup', ()=>{
   clearTimeout(lpTimer); lpTimer = null;
-  if(dragEl){ dragEl.classList.remove('drag'); dragEl = null; }
+  if(dragEl){ dragEl.classList.remove('drag'); dragEl = null; dragCont = null; }
 });
 document.addEventListener('pointercancel', ()=>{
   clearTimeout(lpTimer); lpTimer = null;
-  if(dragEl){ dragEl.classList.remove('drag'); dragEl = null; }
+  if(dragEl){ dragEl.classList.remove('drag'); dragEl = null; dragCont = null; }
 });
 function renderHoy(){
   $('hoyTotal').textContent = fmt(datosDia(hoyISO()).total);

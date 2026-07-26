@@ -50,8 +50,10 @@ internet; icono ☁️/📴 en el header):
 
 - **Vender**: grilla táctil por categorías (~129 artículos + "Varios" precio
   libre), fotos, toppings (franja fija + hoja modal), ticket con cantidades.
-  Categorías en **orden de prioridad** (desayunos → cups → cakes → batidos →
-  bebidas → waffles → café → jugos → paletas → varios), la app abre en la primera.
+  Categorías en **orden de uso real** medido sobre 18 días de ventas
+  (desayunos 53.8 u/día → cups 25.1 → cakes 20.6 → waffles 20.0 → bebidas 17.4
+  → jugos 8.8 → batidos 8.5 → café 5.5 → paletas 3.5 → varios 3.0), la app
+  abre en la primera.
 - **Categorías editables desde la tablet**: viven en `S.cats` (ya no son una
   constante del código); `CATS` apunta a `S.cats` vía `aplicarCats()`, que
   además evita quedar parado en una categoría borrada. Admin → 🗂️ Categorías:
@@ -59,6 +61,9 @@ internet; icono ☁️/📴 en el header):
   artículos), reordenar ▲▼ (ese es el orden al vender) y eliminar solo si está
   vacía. `varios` es fija (trae el botón de precio libre, `CAT_VARIOS`).
   Se suben a `catalog/main` para poder detectarlas desde el código.
+  También se **reordenan arrastrando** desde la pantalla de Vender: el modo
+  "mantener presionado" mueve tanto las fichas de producto como los chips de
+  categoría, y "Listo, guardar orden" guarda ambos.
   **Reorganizar fichas**: mantener presionado un producto ~0.5s activa modo
   edición estilo iPhone (tiemblan y se arrastran); "Listo, guardar orden" guarda
   `pos` por artículo dentro de su categoría.
@@ -120,7 +125,7 @@ internet; icono ☁️/📴 en el header):
   desde `save()`). Admin → "Respaldar ahora" (forzado) y "Restaurar desde la
   nube" (doble confirmación, aplica migraciones). El exportar/importar `.json`
   sigue como segunda copia.
-- **Migración**: `migrar()` con `S.priceV` (va en **14**) — cambios de precios/
+- **Migración**: `migrar()` con `S.priceV` (va en **15**) — cambios de precios/
   artículos/estructura sin borrar datos. Toda alteración del catálogo o del
   modelo debe ir como nueva versión aquí Y reflejarse en `seed()`.
 
@@ -129,7 +134,7 @@ internet; icono ☁️/📴 en el header):
 ```js
 S = {
   codes: { sup, adm },
-  priceV: 14,
+  priceV: 15,
   empleados: [{name, code}],                    // descuento 12%
   waDest: [{num, name, cats:'all'|[catId,...]}],
   cats: [{id, nombre, color}],                   // editables desde Admin
