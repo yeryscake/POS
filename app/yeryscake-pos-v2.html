@@ -577,6 +577,7 @@ const CATS_DEFAULT = [
   {id:'desayunos', nombre:'Desayunos',        color:'#FFE066'},  // 53.8 u/día
   {id:'cups',      nombre:'Bolocups & Cremas',color:'#B58CFF'},  // 25.1
   {id:'cakes',     nombre:'Cakes & Tortas',   color:'#8A5A44'},  // 20.6
+  {id:'bleki',     nombre:'Bleki Dessert',   color:'#E63950'},  // nueva
   {id:'waffles',   nombre:'Waffles & Antojitos', color:'#FFB84D'}, // 20.0
   {id:'bebidas',   nombre:'Bebidas',          color:'#6BB8FF'},  // 17.4
   {id:'jugos',     nombre:'Jugos Naturales',  color:'#7BD88F'},  // 8.8
@@ -733,7 +734,7 @@ function aplicarCats(){
 function seed(){
   return {
     codes:{sup:'1234', adm:'2580'},
-    priceV:15,
+    priceV:16,
     cats: CATS_DEFAULT.map(c=>({...c})),
     empleados:[
       {name:'Erica', code:'0207'},
@@ -745,7 +746,7 @@ function seed(){
       {num:'5997804048', name:'Erica', cats:'all'},
       {num:'5997962511', name:'Dahiana', cats:'all'},
       {num:'5997015320', name:'Said', cats:'all'},
-      {num:'5997821567', name:'Daniela', cats:['paletas','jugos']},
+      {num:'5997821567', name:'Daniela', cats:['paletas','jugos','bleki']},
       {num:'5997008996', name:'Camilo', cats:['paletas','jugos']},
     ],
     toppings:[
@@ -787,7 +788,7 @@ function seed(){
       it('Cheesecake Maracuyá',7.00,'cups',1,10), it('Cheesecake Oreo',7.00,'cups',1,10),
       it('Cheesecake Fresa',7.00,'cups',1,10,null,2), it('Cheesecake Lotus',7.00,'cups',1,10,null,2),
       it('Glas Kibra',7.00,'cups',1,10), it('Bolocup Chocolate',7.00,'cups',1,10),
-      it('Bolocup 3 Leches',7.00,'cups',1,10), it('Peach cream',8.00,'cups',1,10),
+      it('Bolocup 3 Leches',7.00,'cups',1,10),
       it('Fresacake',12.00,'cups',0,0), it('Fresacake Grande',16.50,'cups',0,0),
       it('Chocofresas',12.00,'cups',0,0), it('Chocofresas Grande',16.50,'cups',0,0),
       it('Fresas con Crema 9oz',10.00,'cups',1,0), it('Fresas con Crema 12oz',15.00,'cups',1,0),
@@ -813,6 +814,10 @@ function seed(){
       it('Carrot Cake',4.00,'cakes',1,0), it('Vainilla Cake',4.00,'cakes',1,0),
       it('Minicake (4-5 pers)',25.00,'cakes',0,0), it('Torta 10-12 pers',40.00,'cakes',0,0),
       it('Torta 18-20 pers',75.00,'cakes',0,0),
+      // BLEKI DESSERT (postres en lata, con inventario, aviso a Daniela al llegar a 1)
+      it('Vanilla Passion',8.00,'bleki',1,5,null,1), it('Choco Berry',8.00,'bleki',1,5,null,1),
+      it('Vanilla Coco',8.00,'bleki',1,5,null,1), it('Peach Cream',8.00,'bleki',1,5,null,1),
+      it('Red Berry',8.00,'bleki',1,5,null,1), it('Choco Oreo',8.00,'bleki',1,5,null,1),
       // DESAYUNOS
       it('Buñuelo',2.00,'desayunos',0,0), it('Croissant',2.00,'desayunos',0,0),
       it('Pandebono',2.00,'desayunos',0,0), it('Palito de Salchicha',2.25,'desayunos',0,0),
@@ -1055,6 +1060,24 @@ function migrar(){
       return (ia<0?999:ia) - (ib<0?999:ib); // las creadas en la tablet van al final
     });
     S.priceV = 15;
+  }
+  if((S.priceV||1) < 16){
+    mchanged = true;
+    // Bleki Dessert: postres en lata a $8, stock 5, mínimo 1 (avisa a Daniela).
+    if(!S.cats.some(c=>c.id==='bleki')){
+      const i = S.cats.findIndex(c=>c.id==='cakes');
+      S.cats.splice(i<0 ? S.cats.length : i+1, 0, {id:'bleki', nombre:'Bleki Dessert', color:'#E63950'});
+    }
+    // "Peach cream" ya existía en Bolocups: se mueve y se renombra como en la lata
+    const pc = S.items.find(f=>f.name==='Peach cream');
+    if(pc){ pc.name = 'Peach Cream'; pc.cat = 'bleki'; pc.track = true; pc.min = 1; pc.color = '#E63950'; pc.pos = null; }
+    ['Vanilla Passion','Choco Berry','Vanilla Coco','Peach Cream','Red Berry','Choco Oreo'].forEach(n=>{
+      if(!S.items.some(f=>f.name===n))
+        S.items.push(it(n, 8.00, 'bleki', 1, 5, '#E63950', 1));
+    });
+    const dani = (S.waDest||[]).find(d=>d.num==='5997821567');
+    if(dani && Array.isArray(dani.cats) && !dani.cats.includes('bleki')) dani.cats.push('bleki');
+    S.priceV = 16;
   }
   return mchanged;
 }

@@ -50,6 +50,9 @@ internet; icono ☁️/📴 en el header):
 
 - **Vender**: grilla táctil por categorías (~129 artículos + "Varios" precio
   libre), fotos, toppings (franja fija + hoja modal), ticket con cantidades.
+  Incluye **Bleki Dessert** (postres en lata a $8: Vanilla Passion, Choco
+  Berry, Vanilla Coco, Peach Cream, Red Berry, Choco Oreo — mínimo 1, avisan
+  a Daniela al llegar a 1).
   Categorías en **orden de uso real** medido sobre 18 días de ventas
   (desayunos 53.8 u/día → cups 25.1 → cakes 20.6 → waffles 20.0 → bebidas 17.4
   → jugos 8.8 → batidos 8.5 → café 5.5 → paletas 3.5 → varios 3.0), la app
@@ -125,7 +128,7 @@ internet; icono ☁️/📴 en el header):
   desde `save()`). Admin → "Respaldar ahora" (forzado) y "Restaurar desde la
   nube" (doble confirmación, aplica migraciones). El exportar/importar `.json`
   sigue como segunda copia.
-- **Migración**: `migrar()` con `S.priceV` (va en **15**) — cambios de precios/
+- **Migración**: `migrar()` con `S.priceV` (va en **16**) — cambios de precios/
   artículos/estructura sin borrar datos. Toda alteración del catálogo o del
   modelo debe ir como nueva versión aquí Y reflejarse en `seed()`.
 
@@ -134,7 +137,7 @@ internet; icono ☁️/📴 en el header):
 ```js
 S = {
   codes: { sup, adm },
-  priceV: 15,
+  priceV: 16,
   empleados: [{name, code}],                    // descuento 12%
   waDest: [{num, name, cats:'all'|[catId,...]}],
   cats: [{id, nombre, color}],                   // editables desde Admin
