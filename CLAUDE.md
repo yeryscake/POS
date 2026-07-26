@@ -48,10 +48,17 @@ internet; icono ☁️/📴 en el header):
 
 ## Funcionalidades implementadas
 
-- **Vender**: grilla táctil por 10 categorías (~128 artículos + "Varios" precio
+- **Vender**: grilla táctil por categorías (~129 artículos + "Varios" precio
   libre), fotos, toppings (franja fija + hoja modal), ticket con cantidades.
   Categorías en **orden de prioridad** (desayunos → cups → cakes → batidos →
-  bebidas → waffles → café → jugos → paletas → varios), la app abre en Desayunos.
+  bebidas → waffles → café → jugos → paletas → varios), la app abre en la primera.
+- **Categorías editables desde la tablet**: viven en `S.cats` (ya no son una
+  constante del código); `CATS` apunta a `S.cats` vía `aplicarCats()`, que
+  además evita quedar parado en una categoría borrada. Admin → 🗂️ Categorías:
+  crear (nombre + color, id slug único), renombrar (el id no cambia, no rompe
+  artículos), reordenar ▲▼ (ese es el orden al vender) y eliminar solo si está
+  vacía. `varios` es fija (trae el botón de precio libre, `CAT_VARIOS`).
+  Se suben a `catalog/main` para poder detectarlas desde el código.
   **Reorganizar fichas**: mantener presionado un producto ~0.5s activa modo
   edición estilo iPhone (tiemblan y se arrastran); "Listo, guardar orden" guarda
   `pos` por artículo dentro de su categoría.
@@ -113,7 +120,7 @@ internet; icono ☁️/📴 en el header):
   desde `save()`). Admin → "Respaldar ahora" (forzado) y "Restaurar desde la
   nube" (doble confirmación, aplica migraciones). El exportar/importar `.json`
   sigue como segunda copia.
-- **Migración**: `migrar()` con `S.priceV` (va en **13**) — cambios de precios/
+- **Migración**: `migrar()` con `S.priceV` (va en **14**) — cambios de precios/
   artículos/estructura sin borrar datos. Toda alteración del catálogo o del
   modelo debe ir como nueva versión aquí Y reflejarse en `seed()`.
 
@@ -122,9 +129,10 @@ internet; icono ☁️/📴 en el header):
 ```js
 S = {
   codes: { sup, adm },
-  priceV: 13,
+  priceV: 14,
   empleados: [{name, code}],                    // descuento 12%
   waDest: [{num, name, cats:'all'|[catId,...]}],
+  cats: [{id, nombre, color}],                   // editables desde Admin
   toppings: [{id, name, price}],
   items: [{id, name, price, cat, track, stock, min, color, pos}], // pos = orden en la grilla
   sales: [{id, day, time, items:[{name, base, qty, price, itemId|null}], total,
@@ -135,8 +143,7 @@ S = {
   espera: [{id, time, ticket:[...líneas de ticket...]}],  // tickets en pausa
   fondo: 0   // fondo de caja fijo (se suma al DEBE HABER EN CAJA)
 }
-// CATS (en orden de prioridad): desayunos, cups, cakes, batidos, bebidas, waffles, cafe, jugos, paletas, varios
-// TOPCATS = ['paletas','cups','waffles']
+// CATS = S.cats una vez cargado (CATS_DEFAULT es solo el punto de partida)
 // IMGS = {itemId: dataURL} · DEFAULT_IMGS = {nombre: dataURL}
 ```
 
