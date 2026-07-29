@@ -123,11 +123,19 @@ internet; icono ☁️/📴 en el header):
   defecto: sup `1234`, adm `2580`.
 - **Fotos**: DEFAULT_IMGS embebidas por nombre (con alias en `A` para artículos
   renombrados); el admin puede reemplazar desde cámara/galería (IMGS por id).
+  Al **renombrar un artículo** desde Admin, si usaba una foto por defecto se
+  copia a IMGS para no perderla (DEFAULT_IMGS va por nombre).
 - **Respaldo**: automático completo a Firestore (`backup/meta` + `backup/chunk-N`,
   bloques de ~0.5 MB por el límite de 1 MB/doc; S + IMGS, throttled cada 10 min
   desde `save()`). Admin → "Respaldar ahora" (forzado) y "Restaurar desde la
   nube" (doble confirmación, aplica migraciones). El exportar/importar `.json`
   sigue como segunda copia.
+  **Protección contra borrado**: si la app arranca sin datos (`seed()`), queda
+  marcada con `datosFrescos` y NO sube nada (ni catálogo, ni día, ni respaldo);
+  `ofrecerRestauracion()` propone recuperar el respaldo mostrando su fecha.
+  Además `cloudBackup()` nunca reemplaza solo el respaldo desde una copia sin
+  ventas — solo el botón manual, que confirma antes. Sin esto, una tablet
+  vacía (iOS borra el almacenamiento) destruía el respaldo al abrir la app.
 - **Migración**: `migrar()` con `S.priceV` (va en **16**) — cambios de precios/
   artículos/estructura sin borrar datos. Toda alteración del catálogo o del
   modelo debe ir como nueva versión aquí Y reflejarse en `seed()`.

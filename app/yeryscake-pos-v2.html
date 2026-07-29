@@ -671,7 +671,9 @@ let lastBackup = 0, backupEnCurso = false;
 const BACKUP_MIN_MS = 10*60*1000;
 const BACKUP_CHUNK = 500000; // caracteres por documento (~0.5 MB)
 async function cloudBackup(force){
-  if(datosFrescos && !force) return; // copia vacía: nunca pisa el respaldo
+  // Regla de oro: una copia sin ninguna venta nunca reemplaza sola el
+  // respaldo de la nube (solo el botón manual, que pide confirmación).
+  if(!force && (datosFrescos || !S.sales.length)) return;
   if(!cloudReady() || backupEnCurso) return;
   if(!force && Date.now()-lastBackup < BACKUP_MIN_MS) return;
   backupEnCurso = true;
