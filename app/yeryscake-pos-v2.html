@@ -136,6 +136,7 @@
     padding:12px 14px; margin-bottom:8px; box-shadow:0 2px 0 var(--line);}
   .inv-row .dot{width:24px; height:24px; border-radius:50%; flex-shrink:0;}
   .inv-row .n{flex:1; font-weight:800; font-size:15px;}
+  .inv-row.editando{outline:3px solid var(--rose); background:var(--rose-soft);}
   .inv-row .stock{font-size:20px; font-weight:800; min-width:44px; text-align:center;}
   .inv-row input{width:64px;}
 
@@ -577,12 +578,12 @@ const CATS_DEFAULT = [
   {id:'desayunos', nombre:'Desayunos',        color:'#FFE066'},  // 53.8 u/día
   {id:'cups',      nombre:'Bolocups & Cremas',color:'#B58CFF'},  // 25.1
   {id:'cakes',     nombre:'Cakes & Tortas',   color:'#8A5A44'},  // 20.6
-  {id:'bleki',     nombre:'Bleki Dessert',   color:'#E63950'},  // nueva
   {id:'waffles',   nombre:'Waffles & Antojitos', color:'#FFB84D'}, // 20.0
   {id:'bebidas',   nombre:'Bebidas',          color:'#6BB8FF'},  // 17.4
   {id:'jugos',     nombre:'Jugos Naturales',  color:'#7BD88F'},  // 8.8
   {id:'batidos',   nombre:'Batidos & Shakes', color:'#3FBFA8'},  // 8.5
   {id:'cafe',      nombre:'Café',             color:'#A9745B'},  // 5.5
+  {id:'bleki',     nombre:'Bleki Dessert',   color:'#E63950'},  // posición elegida en la tablet
   {id:'paletas',   nombre:'Paletas',          color:'#FF8FB1'},  // 3.5
   {id:'varios',    nombre:'Varios',           color:'#8F7383'},  // 3.0
 ];
@@ -1894,7 +1895,7 @@ function renderInv(){
       <button class="qbtn" onclick="chStock('${f.id}',-1)">−</button>
       <div class="stock" style="${nivelDe(f)==='rojo'?'color:var(--danger)':nivelDe(f)==='amarillo'?'color:#B87A00':''}">${f.stock}</div>
       <button class="qbtn" onclick="chStock('${f.id}',1)">+</button>
-      <input type="number" min="1" placeholder="Cant." id="rep-${f.id}">
+      <input type="number" min="1" placeholder="Cant." id="rep-${f.id}" onfocus="marcarFila(this,true)" onblur="marcarFila(this,false)">
       <button class="btn" onclick="reponer('${f.id}')">Reponer</button>
     </div>`).join('') || '<div class="vacio">Ningún artículo tiene control de inventario</div>';
 }
@@ -1908,7 +1909,9 @@ async function reponer(id){
   if(!invOn) return;
   const n = parseInt($('rep-'+id).value,10);
   if(!n || n<=0){ toast('Escribe la cantidad'); return; }
-  $('rep-'+id).value = ''; // evita reposición duplicada por doble toque
+  const inp = $('rep-'+id);
+  inp.value = ''; // evita reposición duplicada por doble toque
+  marcarFila(inp, false); inp.blur(); // se esconde el teclado y se quita el resaltado
   const f = S.items.find(x=>x.id===id);
   f.stock += n;
   await save(); render();
@@ -1991,7 +1994,7 @@ function renderAdmin(){
     return `
     <div class="adm-row">
       ${src?`<img class="thumb" src="${src}" alt="">`:`<div class="dot" style="background:${f.color};width:20px;height:20px;border-radius:50%"></div>`}
-      <div class="n">${f.name}</div>
+      <input type="text" class="n" value="${esc(f.name)}" style="min-width:130px" onchange="renombrarItem('${f.id}', this.value)">
       <label>$</label><input type="number" step="0.25" value="${f.price}" onchange="editPrice('${f.id}',this.value)">
       <button class="toggle ${f.track?'on':''}" onclick="togTrack('${f.id}')">${f.track?'📦 Inventario':'✨ Al momento'}</button>
       ${f.track?`<label style="font-size:12px;font-weight:800;color:var(--cocoa-soft)">Mín</label><input type="number" min="0" value="${f.min==null?5:f.min}" onchange="editMin('${f.id}',this.value)" style="width:64px">`:''}
@@ -2138,6 +2141,25 @@ async function addItem(){
   S.items.push({id:uid(), name:n, price:pr, cat, track:newTrack, stock:st, min:5, color:selColor});
   $('fNombre').value=$('fPrecio').value=$('fStock').value='';
   await save(); render(); toast('Añadido: '+n);
+}
+/* Resalta la fila del inventario mientras se escribe la cantidad a reponer */
+function marcarFila(inp, on){
+  const fila = inp.closest('.inv-row');
+  if(fila) fila.classList.toggle('editando', on);
+}
+async function renombrarItem(id, val){
+  const f = S.items.find(x=>x.id===id); if(!f) return;
+  const nombre = String(val).trim();
+  if(!nombre){ toast('El nombre no puede quedar vacío'); render(); return; }
+  if(nombre === f.name) return;
+  if(S.items.some(x=>x.id!==id && x.name.toLowerCase()===nombre.toLowerCase())){
+    toast('Ya existe otro artículo con ese nombre'); render(); return;
+  }
+  // si tenía foto por defecto (va por nombre) y ninguna propia, se conserva
+  if(!IMGS[id] && DEFAULT_IMGS[f.name]){ IMGS[id] = DEFAULT_IMGS[f.name]; await saveImgs(); }
+  f.name = nombre;
+  await save(); render();
+  toast('✏️ Nombre actualizado');
 }
 async function editPrice(id,val){
   const f = S.items.find(x=>x.id===id); if(!f) return;
