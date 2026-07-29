@@ -626,6 +626,11 @@ const FIREBASE_CONFIG = {
   appId: "1:977596164835:web:c18eb74d0c41827c0a73d6"
 };
 let cloudDb = null;
+/* Si la app arranca sin datos (instalación nueva, o iOS borró el
+   almacenamiento) NO debe subir esa copia vacía a la nube: eso destruiría
+   el respaldo real. Queda "congelada" hasta que se restaure o el usuario
+   confirme que quiere empezar de cero. */
+let datosFrescos = false;
 if(typeof firebase !== 'undefined' && FIREBASE_CONFIG.apiKey !== 'PEGAR_AQUI'){
   try{
     firebase.initializeApp(FIREBASE_CONFIG);
@@ -640,6 +645,7 @@ function setCloudStatus(ok){
   el.title = ok===null ? '' : ok ? 'Sincronizado con la nube' : 'Sin internet — se sincronizará más tarde';
 }
 async function cloudSync(){
+  if(datosFrescos) return; // copia vacía: nunca pisa la nube
   if(!cloudReady()){ setCloudStatus(null); return; }
   const day = hoyISO();
   try{
@@ -652,7 +658,7 @@ async function cloudSync(){
   }catch(e){ setCloudStatus(false); }
 }
 function cloudSyncDay(day){
-  if(!cloudReady()) return;
+  if(datosFrescos || !cloudReady()) return;
   cloudDb.collection('days').doc(day).set({sales:S.sales.filter(v=>v.day===day), gastos:(S.gastos||[]).filter(g=>g.day===day), updatedAt:Date.now()}).catch(()=>{});
 }
 
@@ -665,6 +671,7 @@ let lastBackup = 0, backupEnCurso = false;
 const BACKUP_MIN_MS = 10*60*1000;
 const BACKUP_CHUNK = 500000; // caracteres por documento (~0.5 MB)
 async function cloudBackup(force){
+  if(datosFrescos && !force) return; // copia vacía: nunca pisa el respaldo
   if(!cloudReady() || backupEnCurso) return;
   if(!force && Date.now()-lastBackup < BACKUP_MIN_MS) return;
   backupEnCurso = true;
@@ -685,6 +692,8 @@ function pintarInfoRespaldo(ts){
   el.textContent = ts ? '☁️ Último respaldo en la nube: ' + new Date(ts).toLocaleString('es') : '☁️ Aún no hay respaldo en la nube';
 }
 async function respaldarAhora(){
+  if(datosFrescos && !confirm('⚠️ Esta tablet no tiene ventas registradas.\n\nSi respaldas ahora vas a REEMPLAZAR el respaldo de la nube por esta copia vacía. ¿Seguro que quieres continuar?')) return;
+  datosFrescos = false;
   toast('☁️ Respaldando…');
   await cloudBackup(true);
   toast(lastBackup ? '✅ Respaldo en la nube completo' : '⚠️ No se pudo respaldar (¿sin internet?)');
@@ -707,6 +716,7 @@ async function restaurarDesdeNube(){
     const data = JSON.parse(payload);
     if(!data || !data.S || !Array.isArray(data.S.items)) throw new Error('formato inválido');
     S = data.S; IMGS = data.IMGS || {};
+    datosFrescos = false;
     if(!S.codes) S.codes = {sup:'1234', adm:'2580'};
     S.gastos = S.gastos || []; S.espera = S.espera || []; S.fondo = S.fondo || 0;
     migrar(); aplicarCats();
@@ -1124,6 +1134,7 @@ async function load(){
       await save();
     }catch(e2){
       S = seed();
+      datosFrescos = true; // tablet vacía: no subir nada hasta decidir qué hacer
       await save();
     }
   }
@@ -1149,6 +1160,25 @@ async function load(){
   render();
   setInterval(checkNuevoDia, 60000);
   document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) checkNuevoDia(); });
+  ofrecerRestauracion();
+}
+/* Arrancó sin datos: si hay un respaldo en la nube, se ofrece recuperarlo
+   en vez de empezar de cero (este es justo el caso de "iOS borró el
+   almacenamiento" o "tablet nueva"). */
+async function ofrecerRestauracion(){
+  if(!datosFrescos || !cloudReady()) return;
+  try{
+    const meta = (await cloudDb.collection('backup').doc('meta').get()).data();
+    if(!meta || !meta.chunks){ datosFrescos = false; return; } // no hay respaldo: empezar de cero es lo correcto
+    const fecha = new Date(meta.updatedAt).toLocaleString('es');
+    if(confirm('Esta tablet no tiene datos guardados, pero hay un RESPALDO EN LA NUBE del:\n' + fecha +
+               '\n\n¿Restaurarlo ahora? (recupera ventas, inventario, precios y fotos)')){
+      await restaurarDesdeNube();
+    } else {
+      datosFrescos = false; // el usuario eligió empezar de cero
+      toast('Se empezará de cero. El respaldo de la nube sigue guardado.');
+    }
+  }catch(e){ /* sin internet: se queda congelado, que es lo seguro */ }
 }
 /* La app puede quedar abierta de un día para otro (PWA en segundo plano). Esto
    detecta el cambio de fecha y refresca la pantalla de Ventas sin recargar. */
