@@ -1920,8 +1920,16 @@ function renderInv(){
   const catIdx = id => CATS.findIndex(c=>c.id===id);
   const list = S.items.filter(i=>i.track).slice()
     .sort((a,b)=> catIdx(a.cat)-catIdx(b.cat) || a.name.localeCompare(b.name,'es'));
-  $('invList').innerHTML = list.map(f=>`
-    <div class="inv-row">
+  let html = '', lastCat = null;
+  list.forEach(f=>{
+    if(f.cat !== lastCat){
+      lastCat = f.cat;
+      const c = CATS.find(x=>x.id===f.cat);
+      html += `<h2 style="display:flex; align-items:center; gap:8px">
+        <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:${c?c.color:'#ccc'}"></span>
+        ${c?c.nombre:f.cat}</h2>`;
+    }
+    html += `<div class="inv-row">
       <div class="dot" style="background:${f.color}"></div>
       <div class="n">${f.name}</div>
       <button class="qbtn" onclick="chStock('${f.id}',-1)">−</button>
@@ -1929,7 +1937,9 @@ function renderInv(){
       <button class="qbtn" onclick="chStock('${f.id}',1)">+</button>
       <input type="number" min="1" placeholder="Cant." id="rep-${f.id}" onfocus="marcarFila(this,true)" onblur="marcarFila(this,false)">
       <button class="btn" onclick="reponer('${f.id}')">Reponer</button>
-    </div>`).join('') || '<div class="vacio">Ningún artículo tiene control de inventario</div>';
+    </div>`;
+  });
+  $('invList').innerHTML = html || '<div class="vacio">Ningún artículo tiene control de inventario</div>';
 }
 async function chStock(id,d){
   if(!invOn) return;
