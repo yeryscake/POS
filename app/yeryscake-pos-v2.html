@@ -825,8 +825,8 @@ function seed(){
       it('Slice Quesillo',7.00,'cakes',1,0), it('Slice Chocoquesillo',8.00,'cakes',1,0),
       it('Slice Beso de Angel',8.00,'cakes',1,0), it('Slice Uva',8.00,'cakes',1,0,null,2),
       it('Carrot Cake',4.00,'cakes',1,0), it('Vainilla Cake',4.00,'cakes',1,0),
-      it('Minicake (4-5 pers)',25.00,'cakes',0,0), it('Torta 10-12 pers',40.00,'cakes',0,0),
-      it('Torta 18-20 pers',75.00,'cakes',0,0),
+      it('Minicake (4-5 pers)',25.00,'cakes',1,0,null,1), it('Torta 10-12 pers',40.00,'cakes',1,0,null,1),
+      it('Torta 18-20 pers',75.00,'cakes',1,0,null,1),
       // BLEKI DESSERT (postres en lata, con inventario, aviso a Daniela al llegar a 1)
       it('Vanilla Passion',8.00,'bleki',1,5,null,1), it('Choco Berry',8.00,'bleki',1,5,null,1),
       it('Vanilla Coco',8.00,'bleki',1,5,null,1), it('Peach Cream',8.00,'bleki',1,5,null,1),
@@ -1091,6 +1091,15 @@ function migrar(){
     const dani = (S.waDest||[]).find(d=>d.num==='5997821567');
     if(dani && Array.isArray(dani.cats) && !dani.cats.includes('bleki')) dani.cats.push('bleki');
     S.priceV = 16;
+  }
+  if((S.priceV||1) < 17){
+    mchanged = true;
+    // Activa control de inventario para las tortas grandes (antes se vendían sin descontar stock)
+    ['Minicake (4-5 pers)','Torta 10-12 pers','Torta 18-20 pers'].forEach(n=>{
+      const f = S.items.find(x=>x.name===n);
+      if(f){ f.track = true; if(f.min==null) f.min = 1; }
+    });
+    S.priceV = 17;
   }
   return mchanged;
 }

@@ -19,8 +19,10 @@ Moneda: USD.
   en vivo (lee de Firebase). Sin contraseña — no compartir el link públicamente.
 - `app/produccion.html` — Panel de solo lectura para la tablet del ghost kitchen:
   stock en vivo de postres (bolocups, cheesecakes, fresas con crema, slices,
-  tortas, arroz con leche), banner rojo + sonido al llegar al mínimo, todo cabe
-  en una pantalla sin deslizar (auto-escala).
+  tortas —incluye Minicake y las tortas de 10-12 y 18-20 pers—, arroz con leche),
+  banner rojo + sonido al llegar al mínimo, **sonido corto distinto cada vez que
+  se vende algo** (baja el stock de cualquier artículo, no solo al llegar al
+  mínimo), todo cabe en una pantalla sin deslizar (auto-escala).
 - `app/manifest.webmanifest` + `app/sw.js` + `app/icons/` — PWA instalable y
   offline (service worker network-first para el HTML: cada deploy se ve al
   reabrir la app con internet).
@@ -136,7 +138,8 @@ internet; icono ☁️/📴 en el header):
   Además `cloudBackup()` nunca reemplaza solo el respaldo desde una copia sin
   ventas — solo el botón manual, que confirma antes. Sin esto, una tablet
   vacía (iOS borra el almacenamiento) destruía el respaldo al abrir la app.
-- **Migración**: `migrar()` con `S.priceV` (va en **16**) — cambios de precios/
+- **Migración**: `migrar()` con `S.priceV` (va en **17**: activa control de
+  inventario en Minicake y las dos tortas grandes) — cambios de precios/
   artículos/estructura sin borrar datos. Toda alteración del catálogo o del
   modelo debe ir como nueva versión aquí Y reflejarse en `seed()`.
 
@@ -145,7 +148,7 @@ internet; icono ☁️/📴 en el header):
 ```js
 S = {
   codes: { sup, adm },
-  priceV: 16,
+  priceV: 17,
   empleados: [{name, code}],                    // descuento 12%
   waDest: [{num, name, cats:'all'|[catId,...]}],
   cats: [{id, nombre, color}],                   // editables desde Admin

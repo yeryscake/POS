@@ -93,6 +93,20 @@ function beep(){
     o.start(); o.stop(audioCtx.currentTime + 0.4);
   }catch(e){}
 }
+/* Ping corto y agudo cuando se vende algo (baja el stock) — distinto de la alarma de stock bajo. */
+function beepVenta(){
+  if(!audioCtx) return;
+  try{
+    [660, 990].forEach((freq, i)=>{
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination);
+      o.frequency.value = freq; o.type = 'sine';
+      const t = audioCtx.currentTime + i*0.12;
+      g.gain.setValueAtTime(0.25, t);
+      o.start(t); o.stop(t + 0.11);
+    });
+  }catch(e){}
+}
 
 function nivelDe(f){
   const m = f.min==null?5:f.min;
@@ -122,6 +136,7 @@ if(FIREBASE_CONFIG.apiKey === 'PEGAR_AQUI'){
   firebase.initializeApp(FIREBASE_CONFIG);
   const db = firebase.firestore();
   let previosRojos = new Set();
+  let previosStocks = null; // null = primera carga, no sonar por "ventas" con datos viejos
 
   db.collection('catalog').doc('main').onSnapshot(doc => {
     $('estado').textContent = '🟢 En vivo — actualizado ' + new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
@@ -134,6 +149,13 @@ if(FIREBASE_CONFIG.apiKey === 'PEGAR_AQUI'){
     const nuevosRojos = [...rojosAhora].filter(id => !previosRojos.has(id));
     if(nuevosRojos.length) beep();
     previosRojos = rojosAhora;
+
+    const stocksAhora = new Map(rel.map(f=>[f.id, f.stock]));
+    if(previosStocks){
+      const bajaronAlgunos = [...stocksAhora].some(([id,stock]) => previosStocks.has(id) && stock < previosStocks.get(id));
+      if(bajaronAlgunos && !nuevosRojos.length) beepVenta(); // si ya sonó la alarma roja, no duplicar sonido
+    }
+    previosStocks = stocksAhora;
 
     const rojosItems = rel.filter(f=>rojosAhora.has(f.id));
     if(rojosItems.length){
@@ -148,7 +170,7 @@ if(FIREBASE_CONFIG.apiKey === 'PEGAR_AQUI'){
       ['🍰 Cheesecakes y Glas Kibra', rel.filter(f=>/^(Cheesecake|Glas Kibra)/i.test(f.name))],
       ['🍓 Fresas con crema', rel.filter(f=>/^Fresas con Crema/i.test(f.name))],
       ['🍰 Slices', rel.filter(f=>/^Slice/i.test(f.name))],
-      ['🎂 Tortas', rel.filter(f=>/^(Carrot Cake|Vainilla Cake)$/i.test(f.name))],
+      ['🎂 Tortas', rel.filter(f=>/^(Carrot Cake|Vainilla Cake|Minicake|Torta)/i.test(f.name))],
     ];
     const yaAgrupados = new Set(grupos.flatMap(([,list])=>list.map(f=>f.id)));
     grupos.push(['📦 Otros', rel.filter(f=>!yaAgrupados.has(f.id))]);
