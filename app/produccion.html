@@ -41,6 +41,8 @@
   .tile .s{font-size:38px; font-weight:800; color:var(--purple); line-height:1.05;}
   .tile.rojo .s{color:var(--danger);}
   .tile.amarillo .s{color:var(--warn);}
+  .tile.vendido{background:#FFF3B0; box-shadow:0 0 0 3px var(--ok); animation:destello .6s ease-in-out 3;}
+  @keyframes destello{ 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
   .vacio{color:var(--cocoa-soft); text-align:center; padding:24px 8px; font-size:14px;}
   .config{max-width:480px; margin:60px auto; text-align:center; background:#fff; border-radius:22px; padding:28px; box-shadow:0 2px 0 var(--line);}
   .config .ic{font-size:40px;}
@@ -136,27 +138,14 @@ if(FIREBASE_CONFIG.apiKey === 'PEGAR_AQUI'){
   firebase.initializeApp(FIREBASE_CONFIG);
   const db = firebase.firestore();
   let previosRojos = new Set();
-  let previosStocks = null; // null = primera carga, no sonar por "ventas" con datos viejos
+  let previosStocks = null; // null = primera carga, no sonar/resaltar por "ventas" con datos viejos
+  const RESALTE_MS = 6000; // cuánto tiempo queda marcado un artículo recién vendido
+  let vendidoHasta = new Map(); // id -> timestamp hasta el que se muestra resaltado
+  let ultimoRel = [];
 
-  db.collection('catalog').doc('main').onSnapshot(doc => {
-    $('estado').textContent = '🟢 En vivo — actualizado ' + new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
-    $('estado').className = 'estado on';
-    const data = doc.data();
-    const items = (data && data.items) || [];
-    const rel = items.filter(f => f.track && (f.cat==='cups' || f.cat==='cakes' || f.name==='Arroz con Leche'));
-
+  function pintar(rel){
+    const ahora = Date.now();
     const rojosAhora = new Set(rel.filter(f=>nivelDe(f)==='rojo').map(f=>f.id));
-    const nuevosRojos = [...rojosAhora].filter(id => !previosRojos.has(id));
-    if(nuevosRojos.length) beep();
-    previosRojos = rojosAhora;
-
-    const stocksAhora = new Map(rel.map(f=>[f.id, f.stock]));
-    if(previosStocks){
-      const bajaronAlgunos = [...stocksAhora].some(([id,stock]) => previosStocks.has(id) && stock < previosStocks.get(id));
-      if(bajaronAlgunos && !nuevosRojos.length) beepVenta(); // si ya sonó la alarma roja, no duplicar sonido
-    }
-    previosStocks = stocksAhora;
-
     const rojosItems = rel.filter(f=>rojosAhora.has(f.id));
     if(rojosItems.length){
       $('banner').className = 'banner show';
@@ -178,12 +167,42 @@ if(FIREBASE_CONFIG.apiKey === 'PEGAR_AQUI'){
       <h2>${titulo}</h2>
       <div class="grid">
         ${list.sort((a,b)=>a.name.localeCompare(b.name,'es')).map(f=>`
-          <div class="tile ${nivelDe(f)||''}">
+          <div class="tile ${nivelDe(f)||''} ${(vendidoHasta.get(f.id)||0)>ahora?'vendido':''}">
             <div class="n">${f.name}</div>
             <div class="s">${f.stock}</div>
           </div>`).join('')}
       </div>`).join('') || '<div class="vacio">Sin artículos configurados todavía</div>';
     ajustarPantalla();
+  }
+
+  // Repinta cada segundo solo para ir quitando el resalte de "vendido" cuando expira.
+  setInterval(()=>{ if(vendidoHasta.size) pintar(ultimoRel); }, 1000);
+
+  db.collection('catalog').doc('main').onSnapshot(doc => {
+    $('estado').textContent = '🟢 En vivo — actualizado ' + new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
+    $('estado').className = 'estado on';
+    const data = doc.data();
+    const items = (data && data.items) || [];
+    const rel = items.filter(f => f.track && (f.cat==='cups' || f.cat==='cakes' || f.name==='Arroz con Leche'));
+    ultimoRel = rel;
+
+    const rojosAhora = new Set(rel.filter(f=>nivelDe(f)==='rojo').map(f=>f.id));
+    const nuevosRojos = [...rojosAhora].filter(id => !previosRojos.has(id));
+    if(nuevosRojos.length) beep();
+    previosRojos = rojosAhora;
+
+    const stocksAhora = new Map(rel.map(f=>[f.id, f.stock]));
+    if(previosStocks){
+      const vendidosAhora = rel.filter(f => previosStocks.has(f.id) && f.stock < previosStocks.get(f.id));
+      if(vendidosAhora.length){
+        const ahora = Date.now();
+        vendidosAhora.forEach(f => vendidoHasta.set(f.id, ahora + RESALTE_MS));
+        if(!nuevosRojos.length) beepVenta(); // si ya sonó la alarma roja, no duplicar sonido
+      }
+    }
+    previosStocks = stocksAhora;
+
+    pintar(rel);
   }, err => {
     $('estado').textContent = '🔴 Sin conexión con la nube';
     $('estado').className = 'estado off';
