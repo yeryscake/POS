@@ -23,6 +23,16 @@ Moneda: USD.
   banner rojo + sonido al llegar al mínimo, **sonido corto distinto cada vez que
   se vende algo** (baja el stock de cualquier artículo, no solo al llegar al
   mínimo), todo cabe en una pantalla sin deslizar (auto-escala).
+  Artículo vendido resaltado **21 s**. **Sonido siempre activo** (sin botón):
+  el audio arranca solo; si el navegador lo bloquea sale un aviso a pantalla
+  completa y cualquier toque lo activa; reintenta cada 5 s. Wake Lock activo.
+  **Pedidos del local**: tarjetas moradas parpadeando + campanita de 3 notas
+  (distinta de venta/alarma), se repite cada 60 s mientras haya pendientes;
+  "✅ Enviado" los despacha (Auth anónimo para escribir).
+- **Pedidos al taller** (app principal): botón "📣 Pedir al taller" en la barra
+  de pestañas → `PEDIDOS_TALLER` (Crema fresas, Mezcla donas, Salsa frutos
+  rojos, Mezcla waffle). Doc `pedidos/main` = `{id:{name, at, listoAt}}`,
+  escrito por campo con merge; `at` != null = pendiente; tocar de nuevo cancela.
 - `app/manifest.webmanifest` + `app/sw.js` + `app/icons/` — PWA instalable y
   offline (service worker network-first para el HTML: cada deploy se ve al
   reabrir la app con internet).
