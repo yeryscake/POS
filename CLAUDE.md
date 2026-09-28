@@ -128,7 +128,7 @@ internet; icono ☁️/📴 en el header):
   "Pagados" sigue como historial por factura.
   **Unir nombres**: botón "🔗 Unir con otro nombre" en el panel de la persona →
   elige el otro nombre → todas sus facturas (pendientes y pagadas) pasan a ese
-  nombre. Migración v18 unió Dahi→Dahiana y Yesid→Wilder.
+  nombre. Migración v18 unió Dahi→Dahiana y Yesid→Wilder; v19 Erika→Erica.
 - **Seguridad**: anular venta/fiado/gasto pide código de supervisor. La pestaña
   **Inventario** pide código de supervisor al entrar (se vuelve a bloquear al
   salir de la pestaña). Zona Admin bloqueada con código admin. Códigos por
@@ -148,7 +148,7 @@ internet; icono ☁️/📴 en el header):
   Además `cloudBackup()` nunca reemplaza solo el respaldo desde una copia sin
   ventas — solo el botón manual, que confirma antes. Sin esto, una tablet
   vacía (iOS borra el almacenamiento) destruía el respaldo al abrir la app.
-- **Migración**: `migrar()` con `S.priceV` (va en **18**: une nombres de fiados
+- **Migración**: `migrar()` con `S.priceV` (va en **19**: v18-19 unen nombres de fiados
   Dahi→Dahiana y Yesid→Wilder; v17 activó inventario en Minicake y tortas grandes) — cambios de precios/
   artículos/estructura sin borrar datos. Toda alteración del catálogo o del
   modelo debe ir como nueva versión aquí Y reflejarse en `seed()`.
@@ -158,7 +158,7 @@ internet; icono ☁️/📴 en el header):
 ```js
 S = {
   codes: { sup, adm },
-  priceV: 18,
+  priceV: 19,
   empleados: [{name, code}],                    // descuento 12%
   waDest: [{num, name, cats:'all'|[catId,...]}],
   cats: [{id, nombre, color}],                   // editables desde Admin

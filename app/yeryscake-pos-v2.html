@@ -112,6 +112,7 @@
   .fi-chips button small{font-size:13px; color:var(--danger); font-weight:800; margin-top:2px;}
   .fi-chips button.act{background:var(--rose); color:#fff;}
   .fi-chips button.act small{color:#fff;}
+  #unirLista button{border:2px solid var(--line); box-shadow:none;}
   .fi-persona{background:var(--card); border-radius:var(--radius); padding:16px; box-shadow:0 2px 0 var(--line); margin-bottom:14px;}
   .fi-persona .tot{display:flex; justify-content:space-between; align-items:center; font-weight:800; font-size:20px; margin-bottom:12px; gap:10px;}
   .fi-persona .tot b{font-size:30px; color:var(--danger);}
@@ -533,6 +534,16 @@
     </div>
     <button class="big purple" id="abonoBtn" onclick="confirmarAbono()">Registrar pago</button>
     <button class="big ghost" onclick="$('abonoBg').classList.remove('open')" style="color:var(--cocoa-soft)">Cancelar</button>
+  </div>
+</div>
+
+<!-- Hoja para unir nombres de fiados -->
+<div class="sheet-bg" id="unirBg" onclick="if(event.target===this)$('unirBg').classList.remove('open')">
+  <div class="sheet" style="max-width:460px">
+    <h3>🔗 Unir con otro nombre</h3>
+    <p id="unirInfo" style="font-weight:800; margin:0 0 12px"></p>
+    <div class="fi-chips" id="unirLista"></div>
+    <button class="big ghost" onclick="$('unirBg').classList.remove('open')" style="color:var(--cocoa-soft)">Cancelar</button>
   </div>
 </div>
 
@@ -1118,6 +1129,13 @@ function migrar(){
       if(f){ f.track = true; if(f.min==null) f.min = 1; }
     });
     S.priceV = 17;
+  }
+  if((S.priceV||1) < 18){
+    mchanged = true;
+    // Une nombres de fiados que son la misma persona
+    const unir = {'dahi':'Dahiana', 'yesid':'Wilder'};
+    (S.fiados||[]).forEach(f=>{ const n = unir[claveFiado(f.name)]; if(n) f.name = n; });
+    S.priceV = 18;
   }
   return mchanged;
 }
@@ -1785,6 +1803,9 @@ function renderFiados(){
             <button class="del" onclick="anularFiado('${f.id}')">✕</button>
           </div>`;
         }).join('')}
+        <div style="text-align:right; margin-top:4px">
+          <button class="btn" style="background:var(--rose-soft); color:var(--rose-dark)" data-k="${esc(p.key)}" onclick="abrirUnir(this.dataset.k)">🔗 Unir con otro nombre</button>
+        </div>
         <div class="fi-acc">
           <button class="big" data-k="${esc(p.key)}" onclick="abrirAbono('persona',this.dataset.k,false)">💰 Abonar al total</button>
           <button class="big purple" data-k="${esc(p.key)}" onclick="abrirAbono('persona',this.dataset.k,true)">✅ Pagar todo (${fmt(p.saldo)})</button>
@@ -1807,6 +1828,29 @@ function renderFiados(){
       <button class="del" onclick="anularFiado('${f.id}')">✕</button>
     </div>`;
   }).join('') : `<div class="vacio">Aún no hay fiados pagados</div>`;
+}
+// Unir dos nombres que son la misma persona (ej. apodo): todas las facturas
+// (pendientes y pagadas) del nombre actual pasan al nombre elegido.
+let unirDe = null;
+function abrirUnir(key){
+  const otros = personasFiado().filter(p=>p.key!==key);
+  if(!otros.length){ toast('No hay otro nombre con fiados pendientes para unir'); return; }
+  const p = personasFiado().find(x=>x.key===key); if(!p) return;
+  unirDe = key;
+  $('unirInfo').textContent = '¿"' + p.name + '" es la misma persona que…?';
+  $('unirLista').innerHTML = otros.map(o=>
+    `<button data-k="${esc(o.key)}" onclick="confirmarUnir(this.dataset.k)">${esc(o.name)}<small>${fmt(o.saldo)}</small></button>`).join('');
+  $('unirBg').classList.add('open');
+}
+async function confirmarUnir(destKey){
+  const de = personasFiado().find(x=>x.key===unirDe), a = personasFiado().find(x=>x.key===destKey);
+  if(!de || !a) return;
+  if(!confirm('Unir "' + de.name + '" dentro de "' + a.name + '"?\n\nTodas las facturas de ' + de.name + ' quedarán a nombre de ' + a.name + '.')) return;
+  S.fiados.forEach(f=>{ if(claveFiado(f.name)===unirDe) f.name = a.name; });
+  unirDe = null; fiPersona = destKey;
+  $('unirBg').classList.remove('open');
+  await save(); render();
+  toast('🔗 Unido: ahora todo está a nombre de ' + a.name);
 }
 function tapPersona(key){
   fiPersona = fiPersona===key ? null : key;
