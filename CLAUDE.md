@@ -119,6 +119,13 @@ internet; icono ☁️/📴 en el header):
 - **Fiados**: descuenta stock al momento, NO cuenta como venta hasta abonar.
   Abonos parciales/totales (efectivo/tarjeta) entran al día en que se abonan.
   La mercancía fiada SÍ cuenta en unidades/por-artículo del día en que salió.
+  **Pendientes agrupados por persona**: burbujas con nombre + saldo (agrupa por
+  nombre normalizado: sin mayúsculas, acentos ni espacios extra). Al tocar un
+  nombre se ven sus facturas y el total, con: Abonar / Pagar factura (por
+  factura), **Abonar al total** y **Pagar todo**. Los abonos a nivel persona se
+  reparten de la factura más vieja a la más nueva y se guardan en cada
+  `f.abonos` — el modelo de datos no cambia (cierre/reportes/nube igual).
+  "Pagados" sigue como historial por factura.
 - **Seguridad**: anular venta/fiado/gasto pide código de supervisor. La pestaña
   **Inventario** pide código de supervisor al entrar (se vuelve a bloquear al
   salir de la pestaña). Zona Admin bloqueada con código admin. Códigos por
