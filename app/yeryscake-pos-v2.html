@@ -323,6 +323,14 @@
       <div id="catList"></div>
       <p style="font-size:13px; color:var(--cocoa-soft); margin:4px 6px">El orden de esta lista es el orden en que aparecen al vender: usa ▲▼ para poner primero las que más se venden. Solo se puede eliminar una categoría vacía (sin artículos).</p>
 
+      <h2>📣 Pedidos al taller</h2>
+      <div class="form">
+        <input type="text" id="pedNombreIn" placeholder="Nombre del pedido (ej. Masa de pan)" style="flex:1; min-width:200px">
+        <button class="btn" onclick="addPedidoTaller()">Añadir pedido</button>
+      </div>
+      <div id="pedList"></div>
+      <p style="font-size:13px; color:var(--cocoa-soft); margin:4px 6px">Son los botones que salen en "📣 Pedir al taller". El orden de esta lista es el orden de los botones. Los cambios se ven en la pantalla del taller al instante.</p>
+
       <h2>Nuevo artículo</h2>
       <div class="form">
         <input type="text" id="fNombre" placeholder="Nombre">
@@ -1161,6 +1169,12 @@ function migrar(){
     (S.fiados||[]).forEach(f=>{ if(claveFiado(f.name)==='erika') f.name = 'Erica'; });
     S.priceV = 19;
   }
+  if((S.priceV||1) < 20){
+    mchanged = true;
+    // Lista de pedidos al taller editable desde Admin
+    if(!Array.isArray(S.pedidosTaller)) S.pedidosTaller = PEDIDOS_DEFAULT.map(p=>({...p}));
+    S.priceV = 20;
+  }
   return mchanged;
 }
 
@@ -1768,20 +1782,22 @@ function agregarVarios(){
    pendiente. La pantalla del taller (produccion.html) suena/parpadea y al tocar
    "Enviado" pone at:null — aquí se desmarca solo. Se escribe por campo (merge)
    para que local y taller nunca se pisen. */
-const PEDIDOS_TALLER = [
+// Lista editable desde Admin (S.pedidosTaller); esta es solo la de partida.
+const PEDIDOS_DEFAULT = [
   {id:'crema_fresas', name:'Crema fresas'},
   {id:'mezcla_donas', name:'Mezcla donas'},
   {id:'salsa_frutos_rojos', name:'Salsa frutos rojos'},
   {id:'mezcla_waffle', name:'Mezcla waffle'},
 ];
+const pedidosLista = () => (S && S.pedidosTaller) || PEDIDOS_DEFAULT;
 let pedidosEstado = {}, pedidosCargados = false;
 function hora2(t){ return new Date(t).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'}); }
 function renderPedidos(){
-  const pend = PEDIDOS_TALLER.filter(p=>pedidosEstado[p.id] && pedidosEstado[p.id].at);
+  const pend = pedidosLista().filter(p=>pedidosEstado[p.id] && pedidosEstado[p.id].at);
   const b = $('tabPedir');
   b.classList.toggle('hay', pend.length>0);
   b.textContent = pend.length ? '📣 Pedido al taller ('+pend.length+')' : '📣 Pedir al taller';
-  $('pedGrid').innerHTML = PEDIDOS_TALLER.map(p=>{
+  $('pedGrid').innerHTML = pedidosLista().map(p=>{
     const e = pedidosEstado[p.id] || {};
     return e.at
       ? `<button class="on" onclick="tocarPedido('${p.id}')">⏳ ${p.name}<small>Pedido ${hora2(e.at)} · toca para cancelar</small></button>`
@@ -1796,7 +1812,7 @@ function abrirPedidos(){
 let pedidoBusy = false;
 async function tocarPedido(id){
   if(pedidoBusy || !cloudReady()) return;
-  const p = PEDIDOS_TALLER.find(x=>x.id===id); if(!p) return;
+  const p = pedidosLista().find(x=>x.id===id); if(!p) return;
   const e = pedidosEstado[id] || {};
   if(e.at && !confirm('¿Cancelar el pedido de ' + p.name + '?')) return;
   pedidoBusy = true;
@@ -1811,7 +1827,7 @@ if(cloudReady()){
   cloudDb.collection('pedidos').doc('main').onSnapshot(doc=>{
     const nuevo = doc.data() || {};
     if(pedidosCargados){
-      PEDIDOS_TALLER.forEach(p=>{
+      pedidosLista().forEach(p=>{
         const antes = pedidosEstado[p.id] || {}, ahora = nuevo[p.id] || {};
         if(antes.at && !ahora.at && ahora.listoAt && ahora.listoAt !== antes.listoAt)
           toast('✅ El taller ya envió: ' + p.name);
@@ -1819,6 +1835,7 @@ if(cloudReady()){
     }
     pedidosEstado = nuevo; pedidosCargados = true;
     renderPedidos();
+    if($('pedList')) renderPedidosAdmin();
   }, ()=>{});
 }
 
@@ -2276,6 +2293,7 @@ function renderAdmin(){
   if(!adminOn) return;
   if(document.activeElement !== $('fondoIn')) $('fondoIn').value = (S.fondo||0) ? S.fondo : '';
   renderCatsAdmin();
+  renderPedidosAdmin();
   $('fCat').innerHTML = CATS.map(c=>`<option value="${c.id}" ${c.id===admCat?'selected':''}>${c.nombre}</option>`).join('');
   $('fColores').innerHTML = PALETTE.map(c=>
     `<button class="cop ${c===selColor?'on':''}" style="background:${c}" onclick="selColor='${c}';renderAdmin()"></button>`).join('');
@@ -2383,6 +2401,61 @@ async function delCat(id){
   aplicarCats();
   await save(); render();
   toast('Categoría eliminada');
+}
+
+/* ── Admin: pedidos al taller ── */
+function renderPedidosAdmin(){
+  const L = pedidosLista();
+  $('pedList').innerHTML = L.length ? L.map((p,i)=>{
+    const pend = pedidosEstado[p.id] && pedidosEstado[p.id].at;
+    return `
+    <div class="adm-row">
+      <input type="text" value="${esc(p.name)}" style="flex:1; min-width:150px" onchange="renombrarPedidoTaller('${p.id}', this.value)">
+      ${pend?'<span class="tag" style="background:#EDE3FA">⏳ pedido ahora</span>':''}
+      <button class="btn mini" onclick="moverPedidoTaller(${i},-1)" ${i===0?'disabled style="opacity:.3"':''}>▲</button>
+      <button class="btn mini" onclick="moverPedidoTaller(${i},1)" ${i===L.length-1?'disabled style="opacity:.3"':''}>▼</button>
+      <button class="btn red" onclick="delPedidoTaller('${p.id}')">Eliminar</button>
+    </div>`;
+  }).join('') : '<div class="vacio">No hay pedidos. Añade el primero arriba.</div>';
+}
+async function addPedidoTaller(){
+  const name = $('pedNombreIn').value.trim();
+  if(!name){ toast('Escribe el nombre del pedido'); return; }
+  S.pedidosTaller = S.pedidosTaller || PEDIDOS_DEFAULT.map(p=>({...p}));
+  if(S.pedidosTaller.some(p=>p.name.toLowerCase()===name.toLowerCase())){ toast('Ya existe un pedido con ese nombre'); return; }
+  const base = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,24) || 'pedido';
+  let id = base, n = 2;
+  while(S.pedidosTaller.some(p=>p.id===id)) id = base + '_' + (n++);
+  S.pedidosTaller.push({id, name});
+  $('pedNombreIn').value = '';
+  await save(); render();
+  toast('📣 Pedido "' + name + '" añadido');
+}
+async function renombrarPedidoTaller(id, name){
+  const p = (S.pedidosTaller||[]).find(x=>x.id===id); if(!p) return;
+  name = name.trim();
+  if(!name){ render(); return; }
+  p.name = name;
+  // si está pedido ahora mismo, que el taller vea el nombre nuevo
+  if(cloudReady() && pedidosEstado[id] && pedidosEstado[id].at)
+    cloudDb.collection('pedidos').doc('main').set({[id]:{name}}, {merge:true}).catch(()=>{});
+  await save(); render();
+}
+async function moverPedidoTaller(i, d){
+  const L = S.pedidosTaller; const j = i + d;
+  if(!L || j < 0 || j >= L.length) return;
+  const t = L[i]; L[i] = L[j]; L[j] = t;
+  await save(); render();
+}
+async function delPedidoTaller(id){
+  const p = (S.pedidosTaller||[]).find(x=>x.id===id); if(!p) return;
+  if(!confirm('¿Eliminar el pedido "' + p.name + '"?')) return;
+  S.pedidosTaller = S.pedidosTaller.filter(x=>x.id!==id);
+  // si estaba pedido, se quita también de la pantalla del taller
+  if(cloudReady() && pedidosEstado[id] && pedidosEstado[id].at)
+    cloudDb.collection('pedidos').doc('main').set({[id]:{name:p.name, at:null}}, {merge:true}).catch(()=>{});
+  await save(); render();
+  toast('Pedido eliminado');
 }
 
 let empVer = new Set(); // índices de empleados con el código visible (solo en esta sesión)

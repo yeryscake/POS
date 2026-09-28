@@ -33,6 +33,10 @@ Moneda: USD.
   de pestañas → `PEDIDOS_TALLER` (Crema fresas, Mezcla donas, Salsa frutos
   rojos, Mezcla waffle). Doc `pedidos/main` = `{id:{name, at, listoAt}}`,
   escrito por campo con merge; `at` != null = pendiente; tocar de nuevo cancela.
+  La lista es **editable desde Admin → 📣 Pedidos al taller** (`S.pedidosTaller`,
+  migración v20; `PEDIDOS_DEFAULT` es solo la de partida): añadir, renombrar,
+  ordenar ▲▼, eliminar. Renombrar/eliminar un pedido pendiente actualiza la
+  pantalla del taller al instante.
 - `app/manifest.webmanifest` + `app/sw.js` + `app/icons/` — PWA instalable y
   offline (service worker network-first para el HTML: cada deploy se ve al
   reabrir la app con internet).
@@ -158,7 +162,7 @@ internet; icono ☁️/📴 en el header):
   Además `cloudBackup()` nunca reemplaza solo el respaldo desde una copia sin
   ventas — solo el botón manual, que confirma antes. Sin esto, una tablet
   vacía (iOS borra el almacenamiento) destruía el respaldo al abrir la app.
-- **Migración**: `migrar()` con `S.priceV` (va en **19**: v18-19 unen nombres de fiados
+- **Migración**: `migrar()` con `S.priceV` (va en **20**: v20 lista de pedidos al taller; v18-19 unen nombres de fiados
   Dahi→Dahiana y Yesid→Wilder; v17 activó inventario en Minicake y tortas grandes) — cambios de precios/
   artículos/estructura sin borrar datos. Toda alteración del catálogo o del
   modelo debe ir como nueva versión aquí Y reflejarse en `seed()`.
@@ -168,7 +172,7 @@ internet; icono ☁️/📴 en el header):
 ```js
 S = {
   codes: { sup, adm },
-  priceV: 19,
+  priceV: 20,
   empleados: [{name, code}],                    // descuento 12%
   waDest: [{num, name, cats:'all'|[catId,...]}],
   cats: [{id, nombre, color}],                   // editables desde Admin
