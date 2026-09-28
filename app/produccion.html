@@ -27,9 +27,6 @@
   .estado{font-size:11px; font-weight:800; color:var(--cocoa-soft);}
   .estado.on{color:var(--ok);}
   .estado.off{color:var(--danger);}
-  .sonido{border:none; border-radius:999px; background:var(--purple); color:#fff;
-    font:inherit; font-weight:800; font-size:12px; padding:7px 14px;}
-  .sonido.on{background:var(--ok);}
   .banner{display:none; background:var(--danger); color:#fff; border-radius:12px; padding:8px 12px;
     margin-bottom:6px; font-weight:800; text-align:center; font-size:14px;}
   .banner.show{display:block; animation:pulse 1s infinite;}
@@ -43,6 +40,20 @@
   .tile.amarillo .s{color:var(--warn);}
   .tile.vendido{background:#FFF3B0; box-shadow:0 0 0 3px var(--ok); animation:destello .6s ease-in-out 3;}
   @keyframes destello{ 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+  .pedidos{display:none; margin:4px 0 8px;}
+  .pedidos.show{display:block;}
+  .pedidos .tit{font-size:15px; font-weight:800; color:var(--purple); margin-bottom:6px; letter-spacing:1px;}
+  .pedidos .lista{display:flex; flex-wrap:wrap; justify-content:center; gap:10px;}
+  .pedido{background:var(--purple); color:#fff; border-radius:16px; padding:10px 14px; display:flex; align-items:center; gap:14px;
+    box-shadow:0 0 0 4px #CDB6EE; animation:llamado 1.2s ease-in-out infinite;}
+  .pedido .nm{font-size:24px; font-weight:800; text-transform:uppercase; line-height:1.1; text-align:left;}
+  .pedido .hr{font-size:12px; font-weight:700; opacity:.85; text-align:left;}
+  .pedido button{border:none; border-radius:12px; background:#fff; color:var(--ok); font:inherit; font-weight:800; font-size:17px; padding:12px 16px;}
+  @keyframes llamado{ 0%,100%{box-shadow:0 0 0 4px #CDB6EE} 50%{box-shadow:0 0 0 10px #CDB6EE} }
+  .desbloqueo{position:fixed; inset:0; background:rgba(58,42,51,.78); color:#fff; display:none; align-items:center; justify-content:center;
+    flex-direction:column; z-index:50; font-weight:800; font-size:26px; text-align:center; padding:20px;}
+  .desbloqueo.show{display:flex;}
+  .desbloqueo .ic{font-size:70px; margin-bottom:10px;}
   .vacio{color:var(--cocoa-soft); text-align:center; padding:24px 8px; font-size:14px;}
   .config{max-width:480px; margin:60px auto; text-align:center; background:#fff; border-radius:22px; padding:28px; box-shadow:0 2px 0 var(--line);}
   .config .ic{font-size:40px;}
@@ -56,18 +67,21 @@
   <p style="color:var(--cocoa-soft); font-size:14px">Pega el mismo <code>FIREBASE_CONFIG</code> que usaste en la app principal, dentro de este archivo (<code>app/produccion.html</code>).</p>
 </div>
 
+<div class="desbloqueo" id="desbloqueo"><div class="ic">🔔</div>Toca la pantalla una vez para activar el sonido</div>
+
 <div id="app" style="display:none">
   <div class="topbar">
     <h1>🍰 Producción en vivo</h1>
     <div class="estado" id="estado">Conectando…</div>
-    <button class="sonido" id="btnSonido" onclick="activarSonido()">🔔 Activar sonido</button>
   </div>
+  <div class="pedidos" id="pedidos"><div class="tit">📣 PEDIDOS DEL LOCAL — LLEVAR AL PUNTO DE VENTA</div><div class="lista" id="pedidosLista"></div></div>
   <div class="banner" id="banner"></div>
   <div id="secciones"><div class="vacio">Cargando inventario…</div></div>
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script>
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAqVskewBiki0TJFgXcLIwIQPHbwCnrzgk",
@@ -79,12 +93,55 @@ const FIREBASE_CONFIG = {
 };
 
 const $ = id => document.getElementById(id);
+/* Sonido siempre activo: el audio se prepara solo al abrir. Si el navegador lo
+   bloquea (piden un toque la primera vez), sale un aviso a pantalla completa y
+   cualquier toque en la pantalla lo activa — sin botón. Si el sistema lo
+   suspende después (llamada, pantalla apagada), se reactiva solo o vuelve el aviso. */
 let audioCtx = null;
-function activarSonido(){
-  try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
-  const b = $('btnSonido');
-  b.textContent = '🔔 Sonido activado'; b.classList.add('on');
+try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+function revisarAudio(){
+  if(!audioCtx) return;
+  if(audioCtx.state !== 'running') audioCtx.resume().catch(()=>{});
+  setTimeout(()=>{ $('desbloqueo').classList.toggle('show', !!audioCtx && audioCtx.state !== 'running'); }, 400);
 }
+function desbloquear(){
+  if(!audioCtx){ try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; } }
+  audioCtx.resume().then(()=>{
+    // sonido mudo para "despertar" el audio en iPad
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    g.gain.value = 0.0001; o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+0.05);
+    $('desbloqueo').classList.remove('show');
+  }).catch(()=>{});
+}
+['pointerdown','touchstart','keydown','click'].forEach(ev=>document.addEventListener(ev, desbloquear, {passive:true}));
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) revisarAudio(); });
+if(audioCtx) audioCtx.onstatechange = revisarAudio;
+window.addEventListener('load', revisarAudio);
+setInterval(revisarAudio, 5000);
+function tono(freq, inicio, dur, vol, tipo){
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.connect(g); g.connect(audioCtx.destination);
+  o.frequency.value = freq; o.type = tipo||'sine';
+  const t = audioCtx.currentTime + inicio;
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.start(t); o.stop(t + dur);
+}
+/* Pedido del local: campanita de 3 notas que sube, repetida dos veces — distinta de la venta y de la alarma roja. */
+function beepPedido(){
+  if(!audioCtx) return; revisarAudio();
+  try{
+    [0, 1.1].forEach(base=>{
+      [523, 659, 784].forEach((f,i)=>tono(f, base + i*0.22, 0.5, 0.4, 'triangle'));
+    });
+  }catch(e){}
+}
+// Bloqueo de pantalla: pide que la pantalla no se apague mientras esté abierta
+async function pantallaEncendida(){
+  try{ if('wakeLock' in navigator && !document.hidden) await navigator.wakeLock.request('screen'); }catch(e){}
+}
+pantallaEncendida();
+document.addEventListener('visibilitychange', pantallaEncendida);
 function beep(){
   if(!audioCtx) return;
   try{
@@ -139,7 +196,7 @@ if(FIREBASE_CONFIG.apiKey === 'PEGAR_AQUI'){
   const db = firebase.firestore();
   let previosRojos = new Set();
   let previosStocks = null; // null = primera carga, no sonar/resaltar por "ventas" con datos viejos
-  const RESALTE_MS = 6000; // cuánto tiempo queda marcado un artículo recién vendido
+  const RESALTE_MS = 21000; // cuánto tiempo queda marcado un artículo recién vendido
   let vendidoHasta = new Map(); // id -> timestamp hasta el que se muestra resaltado
   let ultimoRel = [];
 
@@ -174,6 +231,43 @@ if(FIREBASE_CONFIG.apiKey === 'PEGAR_AQUI'){
       </div>`).join('') || '<div class="vacio">Sin artículos configurados todavía</div>';
     ajustarPantalla();
   }
+
+  /* ── Pedidos del local (doc pedidos/main: {id:{name, at, listoAt}}) ── */
+  const REPETIR_PEDIDO_MS = 60000; // mientras haya pedidos sin atender, vuelve a sonar cada minuto
+  let pedidosPrev = null, pedidosAct = {}, ultimoSonPedido = 0;
+  firebase.auth().signInAnonymously().catch(()=>{});
+  function pintarPedidos(){
+    const lista = Object.entries(pedidosAct).filter(([,p])=>p && p.at).sort((a,b)=>a[1].at-b[1].at);
+    $('pedidos').classList.toggle('show', lista.length>0);
+    $('pedidosLista').innerHTML = lista.map(([id,p])=>{
+      const min = Math.floor((Date.now()-p.at)/60000);
+      const hora = new Date(p.at).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
+      return `<div class="pedido">
+        <div><div class="nm">${p.name}</div><div class="hr">Pedido ${hora}${min>0?' · hace '+min+' min':''}</div></div>
+        <button onclick="marcarEnviado('${id}')">✅ Enviado</button>
+      </div>`;
+    }).join('');
+    ajustarPantalla();
+  }
+  window.marcarEnviado = function(id){
+    const p = pedidosAct[id]; if(!p) return;
+    db.collection('pedidos').doc('main').set({[id]:{name:p.name, at:null, listoAt:Date.now()}}, {merge:true})
+      .catch(()=>alert('No se pudo marcar como enviado. Revisa el internet.'));
+  };
+  db.collection('pedidos').doc('main').onSnapshot(doc=>{
+    pedidosAct = doc.data() || {};
+    const pendientes = Object.entries(pedidosAct).filter(([,p])=>p && p.at);
+    if(pedidosPrev){
+      const nuevos = pendientes.filter(([id,p])=>!(pedidosPrev[id] && pedidosPrev[id].at===p.at));
+      if(nuevos.length){ beepPedido(); ultimoSonPedido = Date.now(); }
+    }
+    pedidosPrev = pedidosAct;
+    pintarPedidos();
+  });
+  setInterval(()=>{
+    const hay = Object.values(pedidosAct).some(p=>p && p.at);
+    if(hay){ pintarPedidos(); if(Date.now()-ultimoSonPedido >= REPETIR_PEDIDO_MS){ beepPedido(); ultimoSonPedido = Date.now(); } }
+  }, 15000);
 
   // Repinta cada segundo solo para ir quitando el resalte de "vendido" cuando expira.
   setInterval(()=>{ if(vendidoHasta.size) pintar(ultimoRel); }, 1000);

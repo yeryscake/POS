@@ -40,7 +40,15 @@
     font:inherit; font-weight:700; font-size:15px;
     padding:10px 18px; border-radius:999px; white-space:nowrap;
   }
+  @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.6} }
   nav button.act{background:var(--purple); color:#fff;}
+  nav button#tabPedir{margin-left:auto; background:#EDE3FA; color:var(--purple);}
+  nav button#tabPedir.hay{background:var(--purple); color:#fff; animation:pulse 1.2s infinite;}
+  .ped-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:6px 0 14px;}
+  .ped-grid button{border:3px solid var(--line); background:#fff; border-radius:18px; padding:20px 10px; font:inherit; font-weight:800; font-size:19px;
+    color:var(--cocoa); text-transform:uppercase; line-height:1.15; min-height:96px;}
+  .ped-grid button small{display:block; text-transform:none; font-size:13px; margin-top:6px; font-weight:700;}
+  .ped-grid button.on{background:var(--purple); border-color:var(--purple); color:#fff;}
   main{padding:14px; padding-bottom:120px; max-width:1200px; margin:0 auto;}
   h2{font-size:16px; margin:18px 4px 10px; color:var(--cocoa-soft); text-transform:uppercase; letter-spacing:1px;}
   .msg{position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
@@ -231,6 +239,7 @@
   <button id="tabFiados" onclick="go('fiados')">🤝 Fiados</button>
   <button id="tabAdmin" onclick="go('admin')">🔒 Admin</button>
   <button id="tabVentas" onclick="go('ventas')">📊 Ventas</button>
+  <button id="tabPedir" onclick="abrirPedidos()">📣 Pedir al taller</button>
 </nav>
 
 <main>
@@ -534,6 +543,16 @@
     </div>
     <button class="big purple" id="abonoBtn" onclick="confirmarAbono()">Registrar pago</button>
     <button class="big ghost" onclick="$('abonoBg').classList.remove('open')" style="color:var(--cocoa-soft)">Cancelar</button>
+  </div>
+</div>
+
+<!-- Hoja de pedidos al taller -->
+<div class="sheet-bg" id="pedidosBg" onclick="if(event.target===this)$('pedidosBg').classList.remove('open')">
+  <div class="sheet" style="max-width:520px">
+    <h3>📣 Pedir al taller</h3>
+    <p style="color:var(--cocoa-soft); font-size:14px; margin:0 0 6px">Toca lo que se necesita traer al local. Suena y parpadea en la pantalla del taller hasta que lo marquen como enviado.</p>
+    <div class="ped-grid" id="pedGrid"></div>
+    <button class="big ghost" onclick="$('pedidosBg').classList.remove('open')" style="color:var(--cocoa-soft)">Cerrar</button>
   </div>
 </div>
 
@@ -1742,6 +1761,65 @@ function agregarVarios(){
   $('variosBg').classList.remove('open');
   renderTicket();
   toast(nombre + ' agregado — ' + fmt(precio));
+}
+
+/* ── PEDIDOS AL TALLER ──
+   Doc pedidos/main en Firestore: {id:{name, at, listoAt}}. at != null = pedido
+   pendiente. La pantalla del taller (produccion.html) suena/parpadea y al tocar
+   "Enviado" pone at:null — aquí se desmarca solo. Se escribe por campo (merge)
+   para que local y taller nunca se pisen. */
+const PEDIDOS_TALLER = [
+  {id:'crema_fresas', name:'Crema fresas'},
+  {id:'mezcla_donas', name:'Mezcla donas'},
+  {id:'salsa_frutos_rojos', name:'Salsa frutos rojos'},
+  {id:'mezcla_waffle', name:'Mezcla waffle'},
+];
+let pedidosEstado = {}, pedidosCargados = false;
+function hora2(t){ return new Date(t).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'}); }
+function renderPedidos(){
+  const pend = PEDIDOS_TALLER.filter(p=>pedidosEstado[p.id] && pedidosEstado[p.id].at);
+  const b = $('tabPedir');
+  b.classList.toggle('hay', pend.length>0);
+  b.textContent = pend.length ? '📣 Pedido al taller ('+pend.length+')' : '📣 Pedir al taller';
+  $('pedGrid').innerHTML = PEDIDOS_TALLER.map(p=>{
+    const e = pedidosEstado[p.id] || {};
+    return e.at
+      ? `<button class="on" onclick="tocarPedido('${p.id}')">⏳ ${p.name}<small>Pedido ${hora2(e.at)} · toca para cancelar</small></button>`
+      : `<button onclick="tocarPedido('${p.id}')">${p.name}<small>${e.listoAt?'Último envío '+hora2(e.listoAt):'&nbsp;'}</small></button>`;
+  }).join('');
+}
+function abrirPedidos(){
+  if(!cloudReady()){ toast('📴 Sin conexión con la nube: no se puede avisar al taller'); return; }
+  renderPedidos();
+  $('pedidosBg').classList.add('open');
+}
+let pedidoBusy = false;
+async function tocarPedido(id){
+  if(pedidoBusy || !cloudReady()) return;
+  const p = PEDIDOS_TALLER.find(x=>x.id===id); if(!p) return;
+  const e = pedidosEstado[id] || {};
+  if(e.at && !confirm('¿Cancelar el pedido de ' + p.name + '?')) return;
+  pedidoBusy = true;
+  try{
+    await cloudDb.collection('pedidos').doc('main').set(
+      {[id]: e.at ? {name:p.name, at:null, listoAt:e.listoAt||null} : {name:p.name, at:Date.now(), listoAt:e.listoAt||null}}, {merge:true});
+    toast(e.at ? 'Pedido cancelado: ' + p.name : '📣 Pedido enviado al taller: ' + p.name);
+  }catch(err){ toast('❌ No se pudo enviar. Revisa el internet'); }
+  pedidoBusy = false;
+}
+if(cloudReady()){
+  cloudDb.collection('pedidos').doc('main').onSnapshot(doc=>{
+    const nuevo = doc.data() || {};
+    if(pedidosCargados){
+      PEDIDOS_TALLER.forEach(p=>{
+        const antes = pedidosEstado[p.id] || {}, ahora = nuevo[p.id] || {};
+        if(antes.at && !ahora.at && ahora.listoAt && ahora.listoAt !== antes.listoAt)
+          toast('✅ El taller ya envió: ' + p.name);
+      });
+    }
+    pedidosEstado = nuevo; pedidosCargados = true;
+    renderPedidos();
+  }, ()=>{});
 }
 
 /* ── FIADOS ── */
