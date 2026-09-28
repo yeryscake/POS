@@ -106,6 +106,22 @@
   .esp-chip .inf small{display:block; font-weight:600; color:#B08A3E; font-size:11px;}
   .esp-chip .del{border:none; background:#FFE9E5; color:var(--danger); border-radius:8px;
     width:28px; height:28px; font-weight:800; flex-shrink:0;}
+  .fi-chips{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px;}
+  .fi-chips button{border:none; background:#fff; color:var(--cocoa); font:inherit; font-weight:800; font-size:17px;
+    padding:12px 18px; border-radius:999px; box-shadow:0 2px 0 var(--line); display:flex; flex-direction:column; align-items:center; line-height:1.15; min-width:110px;}
+  .fi-chips button small{font-size:13px; color:var(--danger); font-weight:800; margin-top:2px;}
+  .fi-chips button.act{background:var(--rose); color:#fff;}
+  .fi-chips button.act small{color:#fff;}
+  .fi-persona{background:var(--card); border-radius:var(--radius); padding:16px; box-shadow:0 2px 0 var(--line); margin-bottom:14px;}
+  .fi-persona .tot{display:flex; justify-content:space-between; align-items:center; font-weight:800; font-size:20px; margin-bottom:12px; gap:10px;}
+  .fi-persona .tot b{font-size:30px; color:var(--danger);}
+  .fi-fact{border:2px solid var(--line); border-radius:14px; padding:10px 12px; margin-bottom:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+  .fi-fact .bd{flex:1; min-width:200px; font-size:14px;}
+  .fi-fact .hd{display:flex; justify-content:space-between; font-weight:800; gap:8px;}
+  .fi-fact .det{color:var(--cocoa-soft); font-weight:600; margin-top:2px;}
+  .fi-fact .del{border:none; background:#FFE9E5; color:var(--danger); border-radius:10px; width:38px; height:38px; font-size:16px; font-weight:800;}
+  .fi-acc{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;}
+  .fi-acc .big{margin:0;}
   .vacio{color:var(--cocoa-soft); text-align:center; padding:24px 8px; font-size:14px;}
 
   /* sheets / modales */
@@ -265,6 +281,8 @@
       <button class="btn" id="fiBtnPend" onclick="fiadosVer='pend';render()">Pendientes</button>
       <button class="btn" id="fiBtnPag" style="background:var(--rose-soft); color:var(--rose-dark)" onclick="fiadosVer='pag';render()">Pagados</button>
     </div>
+    <div class="fi-chips" id="fiChips"></div>
+    <div id="fiPersona"></div>
     <div id="fiList"></div>
   </section>
 
@@ -504,16 +522,16 @@
 <!-- Hoja de abono de fiado -->
 <div class="sheet-bg" id="abonoBg" onclick="if(event.target===this)$('abonoBg').classList.remove('open')">
   <div class="sheet" style="max-width:460px">
-    <h3>💰 Abonar fiado</h3>
+    <h3 id="abonoTitulo">💰 Abonar fiado</h3>
     <p id="abonoInfo" style="font-weight:800; margin:0 0 10px"></p>
-    <label style="font-weight:800; font-size:14px">¿Cuánto abona? (deja el saldo completo para pagar todo)</label>
+    <label id="abonoLbl" style="font-weight:800; font-size:14px">¿Cuánto abona?</label>
     <input type="number" class="pago-in" id="abonoMonto" step="0.01" inputmode="decimal">
     <div class="pay-method" style="margin-top:12px">
       <button id="amCash" class="on" onclick="setAbonoMetodo('cash')">💵 Efectivo</button>
       <button id="amCard" onclick="setAbonoMetodo('card')">💳 Tarjeta</button>
       <button id="amTransfer" onclick="setAbonoMetodo('transfer')">🏦 Transferencia</button>
     </div>
-    <button class="big purple" onclick="confirmarAbono()">Registrar pago</button>
+    <button class="big purple" id="abonoBtn" onclick="confirmarAbono()">Registrar pago</button>
     <button class="big ghost" onclick="$('abonoBg').classList.remove('open')" style="color:var(--cocoa-soft)">Cancelar</button>
   </div>
 </div>
@@ -1704,40 +1722,118 @@ function agregarVarios(){
 }
 
 /* ── FIADOS ── */
-let fiadosVer = 'pend', abonoFiadoId = null, abonoMetodo = 'cash';
+// Pendientes se agrupan por persona (burbujas). Un toque en el nombre muestra
+// sus facturas y el total. Los abonos siempre se guardan DENTRO de cada factura
+// (f.abonos), así el cierre, los reportes y la nube siguen igual: "abonar al
+// total" y "pagar todo" reparten el dinero de la factura más vieja a la más nueva.
+let fiadosVer = 'pend', fiPersona = null, abonoMetodo = 'cash';
+let abonoCtx = null; // {tipo:'factura'|'persona', id|key, fijo:bool}
 const saldoDe = f => Math.max(0, f.total - (f.abonos||[]).reduce((a,x)=>a+x.monto,0));
+const r2 = n => Math.round(n*100)/100;
+const claveFiado = n => String(n||'').trim().replace(/\s+/g,' ').toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const metodoTxt = m => m==='cash'?'efectivo':m==='card'?'tarjeta':m==='transfer'?'transferencia':m;
+function personasFiado(){
+  const map = {};
+  S.fiados.filter(f=>saldoDe(f)>0.005).forEach(f=>{
+    const k = claveFiado(f.name);
+    if(!map[k]) map[k] = {key:k, name:f.name.trim(), facturas:[], saldo:0};
+    map[k].facturas.push(f); map[k].saldo += saldoDe(f);
+    map[k].name = f.name.trim(); // queda el nombre de la factura más reciente
+  });
+  Object.values(map).forEach(p=>p.facturas.sort((a,b)=>(a.day+a.time).localeCompare(b.day+b.time)));
+  return Object.values(map).sort((a,b)=>a.name.localeCompare(b.name,'es'));
+}
 function renderFiados(){
   const pend = S.fiados.filter(f=>saldoDe(f)>0.005);
   const pag = S.fiados.filter(f=>saldoDe(f)<=0.005);
   const porCobrar = pend.reduce((a,f)=>a+saldoDe(f),0);
+  const personas = personasFiado();
+  if(fiPersona && !personas.some(p=>p.key===fiPersona)) fiPersona = null;
   $('fiStats').innerHTML = `
     <div class="stat"><b>${fmt(porCobrar)}</b><span>Por cobrar</span></div>
-    <div class="stat"><b>${pend.length}</b><span>Fiados pendientes</span></div>
-    <div class="stat"><b>${pag.length}</b><span>Pagados</span></div>`;
+    <div class="stat"><b>${personas.length}</b><span>Personas que deben</span></div>
+    <div class="stat"><b>${pend.length}</b><span>Facturas pendientes</span></div>`;
   $('fiBtnPend').style.opacity = fiadosVer==='pend' ? 1 : 0.55;
   $('fiBtnPag').style.opacity = fiadosVer==='pag' ? 1 : 0.55;
-  const lista = fiadosVer==='pend' ? pend : pag;
-  $('fiList').innerHTML = lista.length ? lista.slice().reverse().map(f=>{
-    const saldo = saldoDe(f), abonado = f.total - saldo;
-    const abonosTxt = (f.abonos||[]).map(a=>`${a.day} ${fmt(a.monto)} (${a.method==='cash'?'efectivo':'tarjeta'})`).join(' · ');
+
+  if(fiadosVer==='pend'){
+    $('fiChips').style.display = '';
+    $('fiList').innerHTML = '';
+    $('fiChips').innerHTML = personas.map(p=>
+      `<button class="${p.key===fiPersona?'act':''}" data-k="${esc(p.key)}" onclick="tapPersona(this.dataset.k)">${esc(p.name)}<small>${fmt(p.saldo)}</small></button>`).join('');
+    const p = personas.find(x=>x.key===fiPersona);
+    if(!personas.length){
+      $('fiPersona').innerHTML = `<div class="vacio">No hay fiados pendientes 🎉</div>`;
+    } else if(!p){
+      $('fiPersona').innerHTML = `<div class="vacio">👆 Toca un nombre para ver lo que debe y cobrar</div>`;
+    } else {
+      $('fiPersona').innerHTML = `<div class="fi-persona">
+        <div class="tot"><span>🤝 ${esc(p.name)} debe en total</span><b>${fmt(p.saldo)}</b></div>
+        ${p.facturas.map(f=>{
+          const saldo = saldoDe(f), abonado = f.total - saldo;
+          const abonosTxt = (f.abonos||[]).map(a=>`${a.day} ${fmt(a.monto)} (${metodoTxt(a.method)})`).join(' · ');
+          return `<div class="fi-fact">
+            <div class="bd">
+              <div class="hd"><span>📄 ${f.day} ${f.time}</span><span>Debe ${fmt(saldo)}</span></div>
+              <div class="det">${f.items.map(i=>i.qty+'× '+esc(i.name)).join(' · ')}</div>
+              <div class="det">Total ${fmt(f.total)}${abonado>0.005?' · Ya abonó '+fmt(abonado):''}</div>
+              ${abonosTxt?`<div class="det">Abonos: ${abonosTxt}</div>`:''}
+            </div>
+            <button class="btn" onclick="abrirAbono('factura','${f.id}',false)">💰 Abonar</button>
+            <button class="btn purple" onclick="abrirAbono('factura','${f.id}',true)">✅ Pagar factura</button>
+            <button class="del" onclick="anularFiado('${f.id}')">✕</button>
+          </div>`;
+        }).join('')}
+        <div class="fi-acc">
+          <button class="big" data-k="${esc(p.key)}" onclick="abrirAbono('persona',this.dataset.k,false)">💰 Abonar al total</button>
+          <button class="big purple" data-k="${esc(p.key)}" onclick="abrirAbono('persona',this.dataset.k,true)">✅ Pagar todo (${fmt(p.saldo)})</button>
+        </div>
+      </div>`;
+    }
+    return;
+  }
+  // Pagados: historial como antes
+  $('fiChips').style.display = 'none';
+  $('fiPersona').innerHTML = '';
+  $('fiList').innerHTML = pag.length ? pag.slice().reverse().map(f=>{
+    const abonosTxt = (f.abonos||[]).map(a=>`${a.day} ${fmt(a.monto)} (${metodoTxt(a.method)})`).join(' · ');
     return `<div class="sale">
       <div class="bd">
-        <div class="hd"><span>🤝 ${f.name}</span><span>${saldo>0.005?'Saldo: '+fmt(saldo):'✅ Pagado'}</span></div>
-        <div class="det">${f.day} ${f.time} — ${f.items.map(i=>i.qty+'× '+i.name).join(' · ')} — Total ${fmt(f.total)}${abonado>0.005?' · Abonado '+fmt(abonado):''}</div>
+        <div class="hd"><span>🤝 ${esc(f.name)}</span><span>✅ Pagado</span></div>
+        <div class="det">${f.day} ${f.time} — ${f.items.map(i=>i.qty+'× '+esc(i.name)).join(' · ')} — Total ${fmt(f.total)}</div>
         ${abonosTxt?`<div class="det">Abonos: ${abonosTxt}</div>`:''}
       </div>
-      ${saldo>0.005?`<button class="btn" onclick="abrirAbono('${f.id}')">💰 Abonar</button>`:''}
       <button class="del" onclick="anularFiado('${f.id}')">✕</button>
     </div>`;
-  }).join('') : `<div class="vacio">${fiadosVer==='pend'?'No hay fiados pendientes 🎉':'Aún no hay fiados pagados'}</div>`;
+  }).join('') : `<div class="vacio">Aún no hay fiados pagados</div>`;
 }
-function abrirAbono(id){
-  const f = S.fiados.find(x=>x.id===id); if(!f) return;
-  abonoFiadoId = id; abonoMetodo = 'cash';
-  $('amCash').classList.add('on'); $('amCard').classList.remove('on'); $('amTransfer').classList.remove('on');
-  $('abonoInfo').textContent = f.name + ' — Saldo pendiente: ' + fmt(saldoDe(f));
-  $('abonoMonto').value = saldoDe(f).toFixed(2);
+function tapPersona(key){
+  fiPersona = fiPersona===key ? null : key;
+  renderFiados();
+}
+function abrirAbono(tipo, ref, fijo){
+  let saldo, info;
+  if(tipo==='factura'){
+    const f = S.fiados.find(x=>x.id===ref); if(!f) return;
+    saldo = saldoDe(f);
+    info = f.name.trim() + ' — Factura del ' + f.day + ' ' + f.time + ' · Debe ' + fmt(saldo);
+    $('abonoTitulo').textContent = fijo ? '✅ Pagar factura' : '💰 Abonar a esta factura';
+  } else {
+    const p = personasFiado().find(x=>x.key===ref); if(!p) return;
+    saldo = p.saldo;
+    info = p.name + ' — Debe en total ' + fmt(saldo) + ' (' + p.facturas.length + (p.facturas.length===1?' factura)':' facturas)');
+    $('abonoTitulo').textContent = fijo ? '✅ Pagar todo' : '💰 Abonar al total';
+  }
+  abonoCtx = {tipo, ref, fijo};
+  abonoMetodo = 'cash'; setAbonoMetodo('cash');
+  $('abonoInfo').textContent = info;
+  $('abonoLbl').textContent = fijo ? 'Monto a cobrar' : '¿Cuánto abona?' + (tipo==='persona' ? ' (se descuenta de la factura más vieja primero)' : '');
+  $('abonoMonto').value = fijo ? saldo.toFixed(2) : '';
+  $('abonoMonto').readOnly = !!fijo;
+  $('abonoBtn').textContent = fijo ? 'Cobrar ' + fmt(saldo) : 'Registrar abono';
   $('abonoBg').classList.add('open');
+  if(!fijo) setTimeout(()=>$('abonoMonto').focus(), 100);
 }
 function setAbonoMetodo(m){
   abonoMetodo = m;
@@ -1746,19 +1842,37 @@ function setAbonoMetodo(m){
   $('amTransfer').classList.toggle('on', m==='transfer');
 }
 async function confirmarAbono(){
-  const f = S.fiados.find(x=>x.id===abonoFiadoId); if(!f) return;
-  const saldo = saldoDe(f);
-  const monto = parseFloat($('abonoMonto').value)||0;
+  const ctx = abonoCtx; if(!ctx) return;
+  let facturas, nombre;
+  if(ctx.tipo==='factura'){
+    const f = S.fiados.find(x=>x.id===ctx.ref); if(!f) return;
+    facturas = [f]; nombre = f.name.trim();
+  } else {
+    const p = personasFiado().find(x=>x.key===ctx.ref); if(!p) return;
+    facturas = p.facturas; nombre = p.name;
+  }
+  const saldo = r2(facturas.reduce((a,f)=>a+saldoDe(f),0));
+  const monto = r2(parseFloat($('abonoMonto').value)||0);
   if(monto <= 0){ toast('Escribe el monto del abono'); return; }
-  if(monto > saldo + 0.005){ toast('El abono no puede ser mayor al saldo ('+fmt(saldo)+')'); return; }
-  abonoFiadoId = null; // evita abono duplicado por doble toque
-  f.abonos = f.abonos || [];
-  f.abonos.push({id:uid(), day:hoyISO(),
-    time:new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'}),
-    monto, method:abonoMetodo});
+  if(monto > saldo + 0.005){ toast('El abono no puede ser mayor a lo que debe ('+fmt(saldo)+')'); return; }
+  abonoCtx = null; // evita abono duplicado por doble toque
+  const day = hoyISO(), time = new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
+  let resta = monto;
+  for(const f of facturas){ // de la más vieja a la más nueva
+    if(resta <= 0.005) break;
+    const parte = r2(Math.min(resta, saldoDe(f)));
+    if(parte <= 0.005) continue;
+    f.abonos = f.abonos || [];
+    f.abonos.push({id:uid(), day, time, monto:parte, method:abonoMetodo});
+    resta = r2(resta - parte);
+  }
   $('abonoBg').classList.remove('open');
+  $('abonoMonto').readOnly = false;
+  const quedan = r2(facturas.reduce((a,f)=>a+saldoDe(f),0));
   await save(); render();
-  toast(saldoDe(f)<=0.005 ? '✅ '+f.name+' pagó todo su fiado' : '💰 Abono registrado. Saldo: '+fmt(saldoDe(f)));
+  toast(quedan<=0.005
+    ? (ctx.tipo==='factura' ? '✅ Factura de '+nombre+' pagada' : '✅ '+nombre+' pagó todo su fiado')
+    : '💰 Abono de '+fmt(monto)+' registrado. '+nombre+' debe '+fmt(quedan));
 }
 function anularFiado(id){
   anularId = id; anularTipo = 'fiado';
