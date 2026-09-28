@@ -1137,6 +1137,11 @@ function migrar(){
     (S.fiados||[]).forEach(f=>{ const n = unir[claveFiado(f.name)]; if(n) f.name = n; });
     S.priceV = 18;
   }
+  if((S.priceV||1) < 19){
+    mchanged = true;
+    (S.fiados||[]).forEach(f=>{ if(claveFiado(f.name)==='erika') f.name = 'Erica'; });
+    S.priceV = 19;
+  }
   return mchanged;
 }
 
