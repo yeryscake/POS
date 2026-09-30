@@ -233,7 +233,7 @@ if(FIREBASE_CONFIG.apiKey === 'PEGAR_AQUI'){
   }
 
   /* ── Pedidos del local (doc pedidos/main: {id:{name, at, listoAt}}) ── */
-  const REPETIR_PEDIDO_MS = 60000; // mientras haya pedidos sin atender, vuelve a sonar cada minuto
+  const REPETIR_PEDIDO_MS = 15*60000; // pedido nuevo suena al instante; si sigue sin atender, repite cada 15 minutos
   let pedidosPrev = null, pedidosAct = {}, ultimoSonPedido = 0;
   firebase.auth().signInAnonymously().catch(()=>{});
   function pintarPedidos(){

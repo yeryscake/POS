@@ -27,7 +27,7 @@ Moneda: USD.
   el audio arranca solo; si el navegador lo bloquea sale un aviso a pantalla
   completa y cualquier toque lo activa; reintenta cada 5 s. Wake Lock activo.
   **Pedidos del local**: tarjetas moradas parpadeando + campanita de 3 notas
-  (distinta de venta/alarma), se repite cada 60 s mientras haya pendientes;
+  (distinta de venta/alarma), suena al llegar y se repite cada 15 min mientras haya pendientes;
   "✅ Enviado" los despacha (Auth anónimo para escribir).
 - **Pedidos al taller** (app principal): botón "📣 Pedir al taller" en la barra
   de pestañas → `PEDIDOS_TALLER` (Crema fresas, Mezcla donas, Salsa frutos
