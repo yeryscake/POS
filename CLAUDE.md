@@ -126,9 +126,11 @@ internet; icono ☁️/📴 en el header):
   `document.title` lleva la fecha para que el PDF se guarde ya nombrado
   (se restaura al cerrar con `cerrarCierre()`).
 - **Cierre de inventario del día** (Ventas → "🍰 Inventario postres" /
-  "🍭 Inventario Fruitpops"): lista en el orden y con los nombres del mensaje
-  que antes se escribía a mano (`CIERRES_INV`: [nombre en mensaje, nombre del
-  artículo en la app, {cat, unidad, key}]). Precarga el stock del sistema; lo
+  "🍭 Inventario Fruitpops"): lista en el orden del mensaje que antes se
+  escribía a mano, pero con los **nombres reales de la tablet** (`f.name`) y
+  títulos de sección = nombre de la categoría en la app (`CIERRES_INV`:
+  secciones {cat|titulo, items: 'Nombre en la app' | {nombre, app, unidad,
+  key}}). Precarga el stock del sistema; lo
   que no lleva inventario (ensaladas en baki, obleas, cucuruchos) se cuenta a
   mano y se recuerda en `S.invManual`. ‼️ automático si stock ≤ mínimo (‼️‼️‼️
   si es 0), editable tocándolo. Si el conteo no cuadra pide código de

@@ -2153,70 +2153,62 @@ function mostrarAlertas(lows){
 }
 
 /* ── CIERRE DE INVENTARIO DEL DÍA (postres de producción / Fruitpops) ──
-   Arma el mismo mensaje que antes se escribía a mano por WhatsApp. Cada fila
-   es [nombre en el mensaje, nombre del artículo en la app, opciones]. Si el
-   artículo no existe o no lleva inventario (ej. ensaladas en baki, obleas),
-   se cuenta a mano y se recuerda el último número (S.invManual). Si un
-   artículo se renombra en Admin, actualizar su nombre aquí. */
+   Arma el mensaje de inventario que antes se escribía a mano por WhatsApp,
+   con los NOMBRES REALES de la tablet (se muestra f.name tal cual está en la
+   app, así si se renombra en Admin el mensaje lo refleja solo).
+   Cada sección: {cat, titulo, items}. Si tiene cat, el título es el nombre
+   de esa categoría en la app y los artículos se buscan solo dentro de ella.
+   items: 'Nombre del artículo en la app' o {nombre, app, unidad, key} para lo
+   que se cuenta a mano (ensaladas en baki, obleas…): se recuerda el último
+   número en S.invManual. Un artículo sin inventario o no encontrado también
+   pasa a "contar a mano" (si se renombra en Admin, actualizarlo aquí). */
 const CIERRES_INV = {
   postres: {
     titulo:'🍰 Inventario postres (producción)', encabezado:'🍰 INVENTARIO POSTRES',
     cats:['cups','cakes','waffles','desayunos'],
-    secciones:[{nombre:'', items:[
-      ['Bolo cup tres leches','Bolocup 3 Leches'], ['Lotus','Cheesecake Lotus'], ['Oreo','Cheesecake Oreo'],
-      ['Choco bolo cup','Bolocup Chocolate'], ['Glass kibra','Glas Kibra'], ['Parchita','Cheesecake Maracuyá'],
-      ['Fresa','Cheesecake Fresa'], ['Carlota de limón','Carlota de limon'], ['Torta chocolate','Slice Chocolate'],
-      ['Beso de ángel','Slice Beso de Angel'], ['Uva cake','Slice Uva'], ['Napolitan','Slice Napolitana'],
-      ['Quesillo','Slice Quesillo'], ['Chocoquesillo','Slice Chocoquesillo'], ['Torta vainilla','Vainilla Cake'],
-      ['Torta zanahoria','Carrot Cake'], ['Torta de banano','Banana cake'], ['Vaso donas','Minidonuts'],
-      ['Arroz con leche','Arroz con Leche'], ['Kefir','Kefir'], ['Kefir botella','Kefir botella 1L'],
+    secciones:[{titulo:'', items:[
+      'Bolocup 3 Leches', 'Cheesecake Lotus', 'Cheesecake Oreo', 'Bolocup Chocolate', 'Glas Kibra',
+      'Cheesecake Maracuyá', 'Cheesecake Fresa', 'Carlota de limon', 'Slice Chocolate', 'Slice Beso de Angel',
+      'Slice Uva', 'Slice Napolitana', 'Slice Quesillo', 'Slice Chocoquesillo', 'Vainilla Cake',
+      'Carrot Cake', 'Banana cake', 'Minidonuts', 'Arroz con Leche', 'Kefir', 'Kefir botella 1L',
     ]}]
   },
   fruitpops: {
     titulo:'🍭 Inventario Fruitpops', encabezado:'🍭 INVENTARIO FRUITPOPS',
     cats:['paletas','bleki','jugos','batidos','desayunos','waffles'],
     secciones:[
-      {nombre:'Paletas', items:[
-        ['Coco','Coco',{cat:'paletas'}], ['Oreo','Oreo',{cat:'paletas'}], ['Piña coco','Piña y Coco',{cat:'paletas'}],
-        ['Frutos rojos','Frutos Rojos',{cat:'paletas'}], ['Chocolate','Chocolate',{cat:'paletas'}],
-        ['Passion fruit','Maracuyá',{cat:'paletas'}], ['Mango','Mango',{cat:'paletas'}], ['Maní','Peanut',{cat:'paletas'}],
-        ['Strawberry agua','Fresa en Agua',{cat:'paletas'}], ['Strawberry kiwi','Fresa y Kiwi',{cat:'paletas'}],
-        ['Tropical','Tropical',{cat:'paletas'}], ['Banana','Banana',{cat:'paletas'}], ['Fresa melk','Fresa Cremosa',{cat:'paletas'}],
-        ['Napolitan','Choc, Vainilla y Fresa',{cat:'paletas'}], ['Man,kiwi,fresa','Kiwi, Mango y Fresa',{cat:'paletas'}],
+      {cat:'paletas', items:[
+        'Coco', 'Oreo', 'Piña y Coco', 'Frutos Rojos', 'Chocolate', 'Maracuyá', 'Mango', 'Peanut',
+        'Fresa en Agua', 'Fresa y Kiwi', 'Tropical', 'Banana', 'Fresa Cremosa', 'Choc, Vainilla y Fresa',
+        'Kiwi, Mango y Fresa',
       ]},
-      {nombre:'Bleki dessert:', items:[
-        ['Choco fresa','Choco fresa'], ['Red berry','Red Berry'], ['Coffe lover','Coffe Lovers'],
-        ['Choco oreo','Choco Oreo'], ['Vanilla coco','Vanilla Coco'], ['Vanilla passion','Vanilla Passion'],
+      {cat:'bleki', items:['Choco fresa', 'Red Berry', 'Coffe Lovers', 'Choco Oreo', 'Vanilla Coco', 'Vanilla Passion']},
+      {cat:'jugos', items:['Jugo Mango', 'Jugo Fresa', 'Jugo Tamarindo', 'Jugo Limón', 'Jugo Passion Fruit']},
+      {titulo:'Ensaladas (baki)', items:[
+        {nombre:'Tuna', unidad:'baki', key:'baki_tuna'}, {nombre:'Huevo', unidad:'baki', key:'baki_huevo'},
+        {nombre:'Pollo', unidad:'baki', key:'baki_pollo'},
       ]},
-      {nombre:'•JUGOS', items:[
-        ['Mango','Jugo Mango'], ['Fresa','Jugo Fresa'], ['Tamarindo','Jugo Tamarindo'],
-        ['Limón','Jugo Limón'], ['Passion','Jugo Passion Fruit'],
+      {titulo:'', items:[
+        {nombre:'Obleas', app:'Obleas', unidad:'(arepitas)', key:'obleas'},
+        {nombre:'Cucurucho', app:'Cucurucho', key:'cucuruchos'},
       ]},
-      {nombre:'Ensaladas:', items:[
-        ['Tuna',null,{unidad:'baki', key:'baki_tuna'}], ['Huevo',null,{unidad:'baki', key:'baki_huevo'}],
-        ['Pollo',null,{unidad:'baki', key:'baki_pollo'}],
-      ]},
-      {nombre:'', items:[
-        ['Obleas',null,{unidad:'(arepitas)', key:'obleas'}], ['Cucuruchos',null,{key:'cucuruchos'}],
-      ]},
-      {nombre:'Jugos verdes', items:[
-        ['Mix green','Mix Green Detox'], ['Mix red','Mix Red Power'], ['Mix yellow','Mix Yellow Energy'],
-        ['Mix pink','Mix Pink Balance'], ['Mix orange','Mix Orange Glow'],
-      ]},
+      {titulo:'Jugos verdes', items:['Mix Green Detox', 'Mix Red Power', 'Mix Yellow Energy', 'Mix Pink Balance', 'Mix Orange Glow']},
     ]
   }
 };
-const normInv = t => String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+const normInv = t => String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+const tituloSecInv = sec => sec.cat ? catNombre(sec.cat) : (sec.titulo||'');
 let invcTipo = null, invcFilas = [];
 function abrirCierreInv(tipo){
   const cfg = CIERRES_INV[tipo]; if(!cfg) return;
   invcTipo = tipo; invcFilas = [];
   S.invManual = S.invManual || {};
-  cfg.secciones.forEach((sec, si)=>sec.items.forEach(([label, nombre, op])=>{
-    op = op || {};
-    const f = nombre ? S.items.find(x=>normInv(x.name)===normInv(nombre) && (!op.cat || x.cat===op.cat)) : null;
+  cfg.secciones.forEach((sec, si)=>sec.items.forEach(entrada=>{
+    const op = typeof entrada==='string' ? {app:entrada} : entrada;
+    const f = op.app ? S.items.find(x=>normInv(x.name)===normInv(op.app) && (!sec.cat || x.cat===sec.cat)) : null;
     const conStock = !!(f && f.track);
-    const key = op.key || ('m_' + normInv(label));
+    const label = f ? f.name : (op.nombre || op.app); // nombre real de la tablet
+    const key = op.key || ('m_' + normInv(op.app || op.nombre));
     invcFilas.push({
       sec:si, label, unidad:op.unidad||'', key,
       f: conStock ? f : null,
@@ -2235,7 +2227,7 @@ function pintarCierreInv(){
   const cfg = CIERRES_INV[invcTipo];
   let html = '', sec = -1;
   invcFilas.forEach((r,i)=>{
-    if(r.sec!==sec){ sec = r.sec; const n = cfg.secciones[sec].nombre; if(n) html += `<div class="invc-sec">${esc(n)}</div>`; }
+    if(r.sec!==sec){ sec = r.sec; const n = tituloSecInv(cfg.secciones[sec]); if(n) html += `<div class="invc-sec">${esc(n)}</div>`; }
     const dif = r.f && r.val!=='' && parseInt(r.val,10)!==r.sis;
     html += `<div class="invc-row">
       <div class="n">${esc(r.label)}${r.unidad ? ` <small>${esc(r.unidad)}</small>` : ''}</div>
@@ -2298,7 +2290,7 @@ async function aplicarCierreInv(){
   const L = [`${cfg.encabezado} — ${fecha}`];
   let sec = -1;
   invcFilas.forEach(r=>{
-    if(r.sec!==sec){ sec = r.sec; L.push(''); const n = cfg.secciones[sec].nombre; if(n) L.push(n); }
+    if(r.sec!==sec){ sec = r.sec; L.push(''); const n = tituloSecInv(cfg.secciones[sec]); if(n) L.push(n); }
     const n = parseInt(r.val,10);
     L.push(`${r.label} ${n}${r.unidad ? ' '+r.unidad : ''}${r.alerta ? (n===0 ? ' ‼️‼️‼️' : ' ‼️‼️') : ''}`);
   });
