@@ -193,6 +193,21 @@ S = {
 Precios = lista oficial julio 2026 + ajustes hechos desde Admin (fuente de verdad
 del catálogo vivo: la tablet / `catalog/main` en Firebase, no el código).
 
+## Rendimiento (iPad viejo) — reglas a respetar
+
+- `render()` solo redibuja la **pestaña visible** (`pagina`, la fija `go()`);
+  `go()` redibuja la pestaña completa al entrar. Si agregas una pestaña nueva,
+  súmala en `render()`.
+- Impresión: `@media print` usa `display:none` en todo menos `#printArea`
+  (con `visibility:hidden` el iPad maquetaba toda la app y tardaba mucho en
+  mostrar Imprimir/Guardar PDF). `html,body` pasan a `height:auto` para que
+  el cierre detallado largo no se corte.
+- Fotos de facturas (gastos): nunca en texto HTML ni en `days/{día}` de la
+  nube (límite 1 MB/doc); en la lista de Ventas se asignan con `img.src`
+  (`data-gfoto`). Siguen en IndexedDB y en el respaldo completo.
+- IndexedDB: una sola conexión reutilizada (`idbOpen`/`idbRun`, reabre sola
+  si iOS la cierra).
+
 ## Cómo verificar cambios (sin navegador en este entorno)
 
 - Sintaxis JS: extraer los `<script>` y parsear con JavaScriptCore

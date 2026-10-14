@@ -205,10 +205,16 @@
 
   /* cierre imprimible */
   #printArea{display:none;}
+  /* Al imprimir se QUITA todo lo demás (display:none), no solo se oculta:
+     con visibility:hidden el iPad tenía que maquetar la app completa (fotos,
+     listas, hojas abiertas) como páginas en blanco antes de mostrar la
+     opción de imprimir/guardar, y por eso tardaba tanto. */
   @media print{
-    body *{visibility:hidden;}
-    #printArea, #printArea *{visibility:visible;}
-    #printArea{display:block; position:absolute; left:0; top:0; width:100%; color:#000; font-family:-apple-system,sans-serif;}
+    /* el body de la app mide una pantalla y hace scroll: al imprimir debe
+       crecer con el cierre, o el detallado largo se cortaría en la 1ª página */
+    html,body{height:auto !important; overflow:visible !important;}
+    body > *:not(#printArea){display:none !important;}
+    #printArea{display:block !important; position:static; width:100%; color:#000; font-family:-apple-system,sans-serif;}
   }
   .cierre-tabla{width:100%; border-collapse:collapse; font-size:13px; margin-top:8px;}
   .cierre-tabla th,.cierre-tabla td{border-bottom:1px solid #ddd; padding:6px 8px; text-align:left;}
@@ -709,15 +715,26 @@ async function cloudSync(){
   try{
     await Promise.all([
       cloudDb.collection('catalog').doc('main').set({items:S.items, toppings:S.toppings, cats:S.cats, priceV:S.priceV, updatedAt:Date.now()}),
-      cloudDb.collection('days').doc(day).set({sales:S.sales.filter(v=>v.day===day), gastos:(S.gastos||[]).filter(g=>g.day===day), updatedAt:Date.now()}),
+      cloudDb.collection('days').doc(day).set(docDia(day)),
       cloudDb.collection('fiados').doc('main').set({list:S.fiados, updatedAt:Date.now()}),
     ]);
     setCloudStatus(true);
   }catch(e){ setCloudStatus(false); }
 }
+/* Documento del día para la nube (lo lee hoy.html). Las fotos de facturas
+   NO van aquí (~200 KB cada una): con 5 o más gastos con foto el documento
+   pasaba el límite de 1 MB de Firestore y la sincronización del día fallaba
+   entera. Las fotos siguen en la tablet y en el respaldo completo. */
+function docDia(day){
+  return {
+    sales: S.sales.filter(v=>v.day===day),
+    gastos: (S.gastos||[]).filter(g=>g.day===day).map(g=>({...g, foto: g.foto ? true : null})),
+    updatedAt: Date.now()
+  };
+}
 function cloudSyncDay(day){
   if(datosFrescos || !cloudReady()) return;
-  cloudDb.collection('days').doc(day).set({sales:S.sales.filter(v=>v.day===day), gastos:(S.gastos||[]).filter(g=>g.day===day), updatedAt:Date.now()}).catch(()=>{});
+  cloudDb.collection('days').doc(day).set(docDia(day)).catch(()=>{});
 }
 
 /* ── RESPALDO COMPLETO AUTOMÁTICO EN LA NUBE ──
@@ -1182,30 +1199,55 @@ function migrar(){
 
 /* ── PERSISTENCIA (IndexedDB, con migración desde localStorage) ── */
 const DB_NAME = 'yeryscake-db', DB_STORE = 'kv';
+/* Una sola conexión reutilizada (antes se abría una nueva en cada guardado
+   y nunca se cerraba: cientos por día en el iPad). */
+let idbConn = null;
 function idbOpen(){
-  return new Promise((res,rej)=>{
+  if(idbConn) return idbConn;
+  idbConn = new Promise((res,rej)=>{
     const rq = indexedDB.open(DB_NAME, 1);
     rq.onupgradeneeded = ()=>{ if(!rq.result.objectStoreNames.contains(DB_STORE)) rq.result.createObjectStore(DB_STORE); };
-    rq.onsuccess = ()=>res(rq.result);
-    rq.onerror = ()=>rej(rq.error);
+    rq.onsuccess = ()=>{
+      const db = rq.result;
+      db.onclose = ()=>{ idbConn = null; };          // iOS puede cerrarla: se reabre sola
+      db.onversionchange = ()=>{ db.close(); idbConn = null; };
+      res(db);
+    };
+    rq.onerror = ()=>{ idbConn = null; rej(rq.error); };
+  });
+  return idbConn;
+}
+/* Ejecuta una operación con la conexión guardada; si iOS la cerró sin avisar
+   (InvalidStateError al abrir la transacción), abre una nueva y reintenta
+   una vez. La transacción y la petición se crean en el mismo paso, como
+   antes (Safari viejo cierra transacciones que esperan entre medio). */
+function idbOp(db, modo, fn){
+  return new Promise((res,rej)=>{
+    const tx = db.transaction(DB_STORE, modo); // si lanza, lo atrapa idbRun
+    fn(tx, res, rej);
   });
 }
-async function idbGet(key){
-  const db = await idbOpen();
-  return new Promise((res,rej)=>{
-    const tx = db.transaction(DB_STORE,'readonly');
+async function idbRun(modo, fn){
+  try{ return await idbOp(await idbOpen(), modo, fn); }
+  catch(e){
+    if(!e || e.name!=='InvalidStateError') throw e;
+    idbConn = null;
+    return idbOp(await idbOpen(), modo, fn);
+  }
+}
+function idbGet(key){
+  return idbRun('readonly', (tx,res,rej)=>{
     const rq = tx.objectStore(DB_STORE).get(key);
     rq.onsuccess = ()=>res(rq.result);
     rq.onerror = ()=>rej(rq.error);
   });
 }
-async function idbSet(key,val){
-  const db = await idbOpen();
-  return new Promise((res,rej)=>{
-    const tx = db.transaction(DB_STORE,'readwrite');
+function idbSet(key,val){
+  return idbRun('readwrite', (tx,res,rej)=>{
     tx.objectStore(DB_STORE).put(val,key);
     tx.oncomplete = ()=>res();
     tx.onerror = ()=>rej(tx.error);
+    tx.onabort = ()=>rej(tx.error);
   });
 }
 async function load(){
@@ -1328,7 +1370,9 @@ function toast(t){
 }
 
 /* ── NAVEGACIÓN ── */
+let pagina = 'vender'; // pestaña visible: render() solo redibuja esa
 function go(p){
+  pagina = p;
   checkNuevoDia();
   if(p!=='inv') invOn = false; // al salir de Inventario vuelve a pedir código
   ['vender','inv','fiados','admin','ventas'].forEach(x=>{ $('pg-'+x).style.display = x===p?'':'none'; });
@@ -1341,9 +1385,18 @@ function go(p){
 }
 
 /* ── RENDER ── */
+/* Antes cada venta/cambio redibujaba TODAS las pestañas (la grilla con las
+   fotos, Admin, Inventario, Fiados y Ventas) aunque no se vieran: pesado en
+   el iPad viejo. Ahora solo la visible; al cambiar de pestaña, go() la
+   redibuja completa, así que nunca se ve algo desactualizado. */
 function render(){
   if(!S) return;
-  renderCats(); renderGrid(); renderTops(); renderTicket(); renderInv(); renderFiados(); renderAdmin(); renderVentas(); renderHoy();
+  if(pagina==='vender'){ renderCats(); renderGrid(); renderTops(); renderTicket(); }
+  else if(pagina==='inv') renderInv();
+  else if(pagina==='fiados') renderFiados();
+  else if(pagina==='admin') renderAdmin();
+  else if(pagina==='ventas') renderVentas();
+  renderHoy();
 }
 function renderCats(){
   $('catBar').innerHTML = CATS.map(c=>
@@ -2632,7 +2685,10 @@ function renderVentas(){
     <div class="stat"><b>${d.vs.length}</b><span>Ventas</span></div>
     <div class="stat"><b>${d.units}</b><span>Unidades salidas${d.unitsFiado?` (${d.unitsFiado} fiadas)`:''}</span></div>
     <div class="stat"><b style="font-size:15px">${top?top[0]+' ('+top[1].qty+')':'—'}</b><span>Más vendido</span></div>`;
-  $('vList').innerHTML = d.vs.length ? d.vs.slice().reverse().map(v=>`
+  /* La lista se arma completa en un texto y se pinta UNA vez. Antes se usaba
+     innerHTML += (abonos, gastos), que obligaba al iPad a releer y volver a
+     construir toda la lista —incluidas las fotos de facturas— cada vez. */
+  let html = d.vs.length ? d.vs.slice().reverse().map(v=>`
     <div class="sale">
       <div class="bd">
         <div class="hd"><span>🕐 ${v.time} <span class="mtag ${v.method}">${metodoLabel(v.method)}</span></span><span>${fmt(v.total)}</span></div>
@@ -2643,27 +2699,33 @@ function renderVentas(){
     </div>`).join('')
     : '<div class="vacio">Sin ventas este día</div>';
   if(d.abonosDia.length){
-    $('vList').innerHTML += d.abonosDia.slice().reverse().map(a=>`
+    html += d.abonosDia.slice().reverse().map(a=>`
       <div class="sale"><div class="bd">
         <div class="hd"><span>🤝 ${a.time} Abono de ${a.name} <span class="mtag ${a.method}">${metodoLabel(a.method)}</span></span><span>${fmt(a.monto)}</span></div>
       </div></div>`).join('');
   }
   if(d.gastosDia.length){
-    $('vList').innerHTML += d.gastosDia.slice().reverse().map(g=>`
+    html += d.gastosDia.slice().reverse().map(g=>`
       <div class="sale">
         <div class="bd">
-          <div class="hd"><span>💸 ${g.time} ${g.desc} <span class="mtag ${g.method}">${metodoLabel(g.method)}</span></span><span>-${fmt(g.monto)}</span></div>
-          ${g.foto?`<div class="det"><img class="thumb" style="width:44px; height:44px; cursor:pointer" src="${g.foto}" onclick="verFoto('${g.id}')"></div>`:''}
+          <div class="hd"><span>💸 ${g.time} ${esc(g.desc)} <span class="mtag ${g.method}">${metodoLabel(g.method)}</span></span><span>-${fmt(g.monto)}</span></div>
+          ${g.foto?`<div class="det"><img class="thumb" style="width:44px; height:44px; cursor:pointer" data-gfoto="${g.id}" alt="" onclick="verFoto('${g.id}')"></div>`:''}
         </div>
         <button class="del" onclick="anularGasto('${g.id}')">✕</button>
       </div>`).join('');
   }
+  $('vList').innerHTML = html;
+  // la foto (cientos de KB) se asigna directo, sin pasar por el texto HTML
+  $('vList').querySelectorAll('[data-gfoto]').forEach(img=>{
+    const g = d.gastosDia.find(x=>x.id===img.dataset.gfoto);
+    if(g && g.foto) img.src = g.foto;
+  });
 }
 function cierreHTML(day, detalle){
   const d = datosDia(day);
   const filas = Object.entries(d.porItem).sort((a,b)=>b[1].qty-a[1].qty)
     .map(([n,x])=>`<tr><td>${n}</td><td>${x.qty}</td><td>${fmt(x.monto)}</td></tr>`).join('');
-  const gastosFilas = d.gastosDia.map(g=>`<tr><td>${g.desc}</td><td>${g.method==='cash'?'Efectivo':'Tarjeta'}</td><td>-${fmt(g.monto)}</td></tr>`).join('');
+  const gastosFilas = d.gastosDia.map(g=>`<tr><td>${esc(g.desc)}</td><td>${g.method==='cash'?'Efectivo':'Tarjeta'}</td><td>-${fmt(g.monto)}</td></tr>`).join('');
   return `
     <h3 style="margin:0">🧾 Cierre del día ${detalle?'— Detallado':'— Resumen'} — Yery'sCake Bonaire</h3>
     <p style="margin:4px 0 12px; color:#777; font-weight:700">${day}</p>
