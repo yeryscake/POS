@@ -202,6 +202,13 @@ del catálogo vivo: la tablet / `catalog/main` en Firebase, no el código).
   (con `visibility:hidden` el iPad maquetaba toda la app y tardaba mucho en
   mostrar Imprimir/Guardar PDF). `html,body` pasan a `height:auto` para que
   el cierre detallado largo no se corte.
+- Imprimir en iPad: WebKit no abre el diálogo mientras haya una conexión de
+  red abierta (bug 136335) y Firestore siempre tiene una (listener de
+  pedidos) → tardaba ~1 min. Al abrir la hoja de cierre/reporte/comprobante
+  se llama `pausarRed()` (`disableNetwork`), y `cerrarCierre()` la reactiva
+  (seguro de 10 min). `imprimirCierre()` llama `window.print()` directo en el
+  toque (iOS lo exige). Toda hoja nueva que imprima debe hacer lo mismo.
+- Fotos de facturas: 800 px, JPEG 0.55 (~70-90 KB, se leen bien).
 - Fotos de facturas (gastos): nunca en texto HTML ni en `days/{día}` de la
   nube (límite 1 MB/doc); en la lista de Ventas se asignan con `img.src`
   (`data-gfoto`). Siguen en IndexedDB y en el respaldo completo.

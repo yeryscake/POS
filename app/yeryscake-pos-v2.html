@@ -511,7 +511,7 @@
   <div class="sheet">
     <div id="cierreBody"></div>
     <div id="cierreWa"></div>
-    <button class="big purple" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+    <button class="big purple" id="btnImprimir" onclick="imprimirCierre()">🖨️ Imprimir / Guardar PDF</button>
     <button class="big ghost" onclick="cerrarCierre()" style="color:var(--cocoa-soft)">Cerrar</button>
   </div>
 </div>
@@ -2194,13 +2194,16 @@ function gastoFotoElegida(ev){
   reader.onload = e => {
     const img = new Image();
     img.onload = () => {
-      const max = 900;
+      // 800 px y calidad 0.55: la factura se sigue leyendo bien y pesa
+      // ~la mitad (antes 900 px / 0.75, ~150 KB por foto). Probado con las
+      // facturas reales: 1.9 MB → 0.95 MB.
+      const max = 800;
       const scale = Math.min(1, max/Math.max(img.width, img.height));
       const w = Math.round(img.width*scale), h = Math.round(img.height*scale);
       const c = document.createElement('canvas');
       c.width = w; c.height = h;
       c.getContext('2d').drawImage(img, 0, 0, w, h);
-      gastoFotoTmp = c.toDataURL('image/jpeg', 0.75);
+      gastoFotoTmp = c.toDataURL('image/jpeg', 0.55);
       $('gastoFotoPrev').innerHTML = `<img src="${gastoFotoTmp}" style="max-width:100%; border-radius:12px; margin-top:8px">`;
     };
     img.src = e.target.result;
@@ -2774,6 +2777,35 @@ const TITULO_ORIGINAL = document.title;
 function cerrarCierre(){
   $('cierreBg').classList.remove('open');
   document.title = TITULO_ORIGINAL;
+  reactivarRed();
+}
+/* Imprimir / Guardar PDF.
+   Safari (iPad) NO muestra el diálogo de imprimir mientras haya una conexión
+   de red abierta (bug de WebKit 136335). La app tiene siempre una abierta con
+   Firebase (escucha los pedidos del taller), que se renueva ~cada minuto:
+   por eso tardaba casi un minuto en salir la impresora.
+   Solución: mientras la hoja de cierre/reporte/comprobante está abierta, la
+   nube queda en pausa (las ventas no se pierden: Firebase las guarda y las
+   sube al reactivar). Se pausa al ABRIR la hoja, así al tocar Imprimir la
+   conexión ya está cerrada y el diálogo sale de inmediato. Se reactiva al
+   cerrar la hoja (o a los 10 min como seguro). */
+let redPausada = false, redTimer = null;
+function pausarRed(){
+  clearTimeout(redTimer);
+  redTimer = setTimeout(reactivarRed, 10*60*1000); // seguro: nunca queda pausada
+  if(redPausada || !cloudDb) return;
+  redPausada = true;
+  cloudDb.disableNetwork().catch(()=>{});
+}
+function reactivarRed(){
+  clearTimeout(redTimer);
+  if(!redPausada || !cloudDb) return;
+  redPausada = false;
+  cloudDb.enableNetwork().catch(()=>{});
+}
+function imprimirCierre(){
+  pausarRed();      // por si acaso (normalmente ya está pausada)
+  window.print();   // directo en el toque: iOS lo exige
 }
 /* Versión en texto del cierre resumido, para mandarlo por WhatsApp */
 const CIERRE_WA = [
@@ -2819,7 +2851,7 @@ function mostrarCierre(detalle){
   } else {
     $('cierreWa').innerHTML = '';
   }
-  $('cierreBg').classList.add('open');
+  $('cierreBg').classList.add('open'); pausarRed(); // ver imprimirCierre()
 }
 function verCierreResumen(){ mostrarCierre(false); }
 function verCierreDetalle(){ mostrarCierre(true); }
@@ -2919,7 +2951,7 @@ function verReporte(tipo){
   $('printArea').innerHTML = html;
   $('cierreWa').innerHTML = '';
   document.title = `Reporte ${desde} a ${hasta} YerysCake`;
-  $('cierreBg').classList.add('open');
+  $('cierreBg').classList.add('open'); pausarRed(); // ver imprimirCierre()
 }
 
 /* Comprobante de una venta individual (si el cliente lo pide después) */
@@ -2948,7 +2980,7 @@ function imprimirVenta(id){
   $('printArea').innerHTML = html;
   $('cierreWa').innerHTML = '';
   document.title = `Comprobante ${v.day} ${v.time.replace(':','.')} YerysCake`;
-  $('cierreBg').classList.add('open');
+  $('cierreBg').classList.add('open'); pausarRed(); // ver imprimirCierre()
 }
 
 load();
