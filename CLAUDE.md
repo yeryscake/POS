@@ -125,6 +125,17 @@ internet; icono ☁️/📴 en el header):
   mensaje listo). Mientras un cierre/comprobante está abierto,
   `document.title` lleva la fecha para que el PDF se guarde ya nombrado
   (se restaura al cerrar con `cerrarCierre()`).
+- **Cierre de inventario del día** (Ventas → "🍰 Inventario postres" /
+  "🍭 Inventario Fruitpops"): lista en el orden y con los nombres del mensaje
+  que antes se escribía a mano (`CIERRES_INV`: [nombre en mensaje, nombre del
+  artículo en la app, {cat, unidad, key}]). Precarga el stock del sistema; lo
+  que no lleva inventario (ensaladas en baki, obleas, cucuruchos) se cuenta a
+  mano y se recuerda en `S.invManual`. ‼️ automático si stock ≤ mínimo (‼️‼️‼️
+  si es 0), editable tocándolo. Si el conteo no cuadra pide código de
+  supervisor, corrige el stock y lo anota al final del mensaje. Envío por
+  WhatsApp a `S.waDest` según categorías (`cfg.cats`) + "Elegir chat o grupo".
+  **Si se renombra un artículo en Admin, actualizar su nombre en `CIERRES_INV`**
+  (si no, esa fila pasa a "contar a mano").
 - **Reportes históricos**: botón "📈 Reportes" en Ventas — esta semana /
   semana pasada / este mes / mes pasado (semanas lunes-domingo), con % de
   cambio vs el período anterior equivalente, desglose por método, gastos,
@@ -184,7 +195,8 @@ S = {
   fiados: [{id, name, day, time, items, total, units, dcto, abonos:[{id,day,time,monto,method}]}],
   gastos: [{id, day, time, desc, monto, method:'cash'|'card', foto|null}],
   espera: [{id, time, ticket:[...líneas de ticket...]}],  // tickets en pausa
-  fondo: 0   // fondo de caja fijo (se suma al DEBE HABER EN CAJA)
+  fondo: 0,  // fondo de caja fijo (se suma al DEBE HABER EN CAJA)
+  invManual: {key: número}  // último conteo a mano del cierre de inventario (opcional)
 }
 // CATS = S.cats una vez cargado (CATS_DEFAULT es solo el punto de partida)
 // IMGS = {itemId: dataURL} · DEFAULT_IMGS = {nombre: dataURL}

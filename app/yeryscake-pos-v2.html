@@ -166,6 +166,16 @@
   .inv-row.editando{outline:3px solid var(--rose); background:var(--rose-soft);}
   .inv-row .stock{font-size:20px; font-weight:800; min-width:44px; text-align:center;}
   .inv-row input{width:64px;}
+  /* cierre de inventario del día */
+  .invc-sec{font-weight:800; font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--rose-dark); margin:16px 4px 4px;}
+  .invc-row{display:flex; align-items:center; gap:8px; padding:6px 4px; border-bottom:1px dashed var(--line);}
+  .invc-row .n{flex:1; font-weight:800; font-size:15px;}
+  .invc-row .n small{font-weight:700; color:var(--cocoa-soft);}
+  .invc-row .sis{font-size:11px; color:var(--cocoa-soft); font-weight:800; min-width:70px; text-align:right;}
+  .invc-row input{width:76px; font-size:20px; text-align:center; font-weight:800; padding:8px;}
+  .invc-row input.dif{border-color:#E8A23A; background:#FFF3D6;}
+  .invc-row .alr{border:2px solid var(--line); background:#fff; border-radius:10px; font-size:16px; padding:6px 8px; opacity:.3;}
+  .invc-row .alr.on{opacity:1; border-color:var(--danger); background:#FFE9E5;}
 
   input,select{font:inherit; padding:10px 12px; border:2px solid var(--line); border-radius:12px; background:#fff; color:var(--cocoa); font-weight:600;}
   input:focus{outline:none; border-color:var(--rose);}
@@ -424,6 +434,8 @@
       <button class="btn" style="background:var(--purple)" onclick="verCierreDetalle()">📋 Cierre detallado</button>
       <button class="btn" style="background:var(--cyan)" onclick="verReporte('sem')">📈 Reportes</button>
       <button class="btn" style="background:var(--danger)" onclick="abrirGasto()">💸 Registrar gasto</button>
+      <button class="btn" style="background:#B0326B" onclick="abrirCierreInv('postres')">🍰 Inventario postres</button>
+      <button class="btn" style="background:#FF7B4D" onclick="abrirCierreInv('fruitpops')">🍭 Inventario Fruitpops</button>
     </div>
     <div class="stats" id="vStats"></div>
     <h2>Detalle de ventas <span style="font-weight:600; text-transform:none; letter-spacing:0">(✕ anula con código de supervisor)</span></h2>
@@ -517,7 +529,7 @@
 </div>
 
 <!-- Hoja de código supervisor -->
-<div class="sheet-bg" id="codeBg" onclick="if(event.target===this)cerrarCodigo()">
+<div class="sheet-bg" id="codeBg" style="z-index:60" onclick="if(event.target===this)cerrarCodigo()">
   <div class="sheet" style="max-width:420px">
     <h3 id="codeTitle">🔒 Anular venta</h3>
     <p id="codeDesc" style="color:var(--cocoa-soft); font-size:14px; margin:0 0 10px">Ingresa el código de supervisor para anular esta factura. Se devolverá el stock.</p>
@@ -613,10 +625,21 @@
 <!-- Hoja de alerta de stock -->
 <div class="sheet-bg" id="waBg" onclick="if(event.target===this)$('waBg').classList.remove('open')">
   <div class="sheet">
-    <h3>⚠️ Stock bajo</h3>
+    <h3 id="waTitulo">⚠️ Stock bajo</h3>
     <div id="waResumen" style="background:var(--rose-soft); border-radius:14px; padding:12px 14px; font-weight:700; font-size:14px; margin-bottom:12px; white-space:pre-line"></div>
     <div id="waBotones"></div>
     <button class="big ghost" onclick="$('waBg').classList.remove('open')" style="color:var(--cocoa-soft)">Cerrar</button>
+  </div>
+</div>
+
+<!-- Cierre de inventario del día (postres / Fruitpops) -->
+<div class="sheet-bg" id="invcBg" onclick="if(event.target===this)cerrarCierreInv()">
+  <div class="sheet" style="max-width:640px">
+    <h3 id="invcTitulo"></h3>
+    <p style="color:var(--cocoa-soft); font-size:14px; font-weight:600; margin:0 0 6px">Revisa cada número contra lo que hay en la nevera. Si no cuadra, escribe lo que contaste. Toca ‼️ para marcar lo que hay que producir/pedir.</p>
+    <div id="invcLista"></div>
+    <button class="big purple" id="invcBtn" style="margin-top:14px" onclick="terminarCierreInv()">📲 Listo: preparar mensaje</button>
+    <button class="big ghost" onclick="cerrarCierreInv()" style="color:var(--cocoa-soft)">Cerrar</button>
   </div>
 </div>
 
@@ -2113,6 +2136,7 @@ function msgAlerta(lows){
 function mostrarAlertas(lows){
   if(!lows.length){ toast('👍 Todo el stock está en buen nivel'); return; }
   const msg = msgAlerta(lows);
+  $('waTitulo').textContent = '⚠️ Stock bajo';
   $('waResumen').textContent = msg;
   const btns = (S.waDest||[]).map(d=>{
     const sub = lows.filter(x=> d.cats==='all' || (Array.isArray(d.cats) && d.cats.includes(x.f.cat)));
@@ -2126,6 +2150,174 @@ function mostrarAlertas(lows){
     `<button class="big purple" style="margin-bottom:8px" data-wa="${urlAll}">📲 Elegir chat o grupo</button>`;
   $('waBotones').querySelectorAll('[data-wa]').forEach(b=>{ b.onclick = () => { location.href = b.getAttribute('data-wa'); }; });
   $('waBg').classList.add('open');
+}
+
+/* ── CIERRE DE INVENTARIO DEL DÍA (postres de producción / Fruitpops) ──
+   Arma el mismo mensaje que antes se escribía a mano por WhatsApp. Cada fila
+   es [nombre en el mensaje, nombre del artículo en la app, opciones]. Si el
+   artículo no existe o no lleva inventario (ej. ensaladas en baki, obleas),
+   se cuenta a mano y se recuerda el último número (S.invManual). Si un
+   artículo se renombra en Admin, actualizar su nombre aquí. */
+const CIERRES_INV = {
+  postres: {
+    titulo:'🍰 Inventario postres (producción)', encabezado:'🍰 INVENTARIO POSTRES',
+    cats:['cups','cakes','waffles','desayunos'],
+    secciones:[{nombre:'', items:[
+      ['Bolo cup tres leches','Bolocup 3 Leches'], ['Lotus','Cheesecake Lotus'], ['Oreo','Cheesecake Oreo'],
+      ['Choco bolo cup','Bolocup Chocolate'], ['Glass kibra','Glas Kibra'], ['Parchita','Cheesecake Maracuyá'],
+      ['Fresa','Cheesecake Fresa'], ['Carlota de limón','Carlota de limon'], ['Torta chocolate','Slice Chocolate'],
+      ['Beso de ángel','Slice Beso de Angel'], ['Uva cake','Slice Uva'], ['Napolitan','Slice Napolitana'],
+      ['Quesillo','Slice Quesillo'], ['Chocoquesillo','Slice Chocoquesillo'], ['Torta vainilla','Vainilla Cake'],
+      ['Torta zanahoria','Carrot Cake'], ['Torta de banano','Banana cake'], ['Vaso donas','Minidonuts'],
+      ['Arroz con leche','Arroz con Leche'], ['Kefir','Kefir'], ['Kefir botella','Kefir botella 1L'],
+    ]}]
+  },
+  fruitpops: {
+    titulo:'🍭 Inventario Fruitpops', encabezado:'🍭 INVENTARIO FRUITPOPS',
+    cats:['paletas','bleki','jugos','batidos','desayunos','waffles'],
+    secciones:[
+      {nombre:'Paletas', items:[
+        ['Coco','Coco',{cat:'paletas'}], ['Oreo','Oreo',{cat:'paletas'}], ['Piña coco','Piña y Coco',{cat:'paletas'}],
+        ['Frutos rojos','Frutos Rojos',{cat:'paletas'}], ['Chocolate','Chocolate',{cat:'paletas'}],
+        ['Passion fruit','Maracuyá',{cat:'paletas'}], ['Mango','Mango',{cat:'paletas'}], ['Maní','Peanut',{cat:'paletas'}],
+        ['Strawberry agua','Fresa en Agua',{cat:'paletas'}], ['Strawberry kiwi','Fresa y Kiwi',{cat:'paletas'}],
+        ['Tropical','Tropical',{cat:'paletas'}], ['Banana','Banana',{cat:'paletas'}], ['Fresa melk','Fresa Cremosa',{cat:'paletas'}],
+        ['Napolitan','Choc, Vainilla y Fresa',{cat:'paletas'}], ['Man,kiwi,fresa','Kiwi, Mango y Fresa',{cat:'paletas'}],
+      ]},
+      {nombre:'Bleki dessert:', items:[
+        ['Choco fresa','Choco fresa'], ['Red berry','Red Berry'], ['Coffe lover','Coffe Lovers'],
+        ['Choco oreo','Choco Oreo'], ['Vanilla coco','Vanilla Coco'], ['Vanilla passion','Vanilla Passion'],
+      ]},
+      {nombre:'•JUGOS', items:[
+        ['Mango','Jugo Mango'], ['Fresa','Jugo Fresa'], ['Tamarindo','Jugo Tamarindo'],
+        ['Limón','Jugo Limón'], ['Passion','Jugo Passion Fruit'],
+      ]},
+      {nombre:'Ensaladas:', items:[
+        ['Tuna',null,{unidad:'baki', key:'baki_tuna'}], ['Huevo',null,{unidad:'baki', key:'baki_huevo'}],
+        ['Pollo',null,{unidad:'baki', key:'baki_pollo'}],
+      ]},
+      {nombre:'', items:[
+        ['Obleas',null,{unidad:'(arepitas)', key:'obleas'}], ['Cucuruchos',null,{key:'cucuruchos'}],
+      ]},
+      {nombre:'Jugos verdes', items:[
+        ['Mix green','Mix Green Detox'], ['Mix red','Mix Red Power'], ['Mix yellow','Mix Yellow Energy'],
+        ['Mix pink','Mix Pink Balance'], ['Mix orange','Mix Orange Glow'],
+      ]},
+    ]
+  }
+};
+const normInv = t => String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+let invcTipo = null, invcFilas = [];
+function abrirCierreInv(tipo){
+  const cfg = CIERRES_INV[tipo]; if(!cfg) return;
+  invcTipo = tipo; invcFilas = [];
+  S.invManual = S.invManual || {};
+  cfg.secciones.forEach((sec, si)=>sec.items.forEach(([label, nombre, op])=>{
+    op = op || {};
+    const f = nombre ? S.items.find(x=>normInv(x.name)===normInv(nombre) && (!op.cat || x.cat===op.cat)) : null;
+    const conStock = !!(f && f.track);
+    const key = op.key || ('m_' + normInv(label));
+    invcFilas.push({
+      sec:si, label, unidad:op.unidad||'', key,
+      f: conStock ? f : null,
+      sis: conStock ? f.stock : null,
+      min: conStock ? (f.min==null ? 5 : f.min) : null,
+      val: conStock ? String(f.stock) : (S.invManual[key]!=null ? String(S.invManual[key]) : ''),
+      alerta: conStock && f.stock <= (f.min==null ? 5 : f.min),
+      tocado:false
+    });
+  }));
+  $('invcTitulo').textContent = cfg.titulo;
+  pintarCierreInv();
+  $('invcBg').classList.add('open');
+}
+function pintarCierreInv(){
+  const cfg = CIERRES_INV[invcTipo];
+  let html = '', sec = -1;
+  invcFilas.forEach((r,i)=>{
+    if(r.sec!==sec){ sec = r.sec; const n = cfg.secciones[sec].nombre; if(n) html += `<div class="invc-sec">${esc(n)}</div>`; }
+    const dif = r.f && r.val!=='' && parseInt(r.val,10)!==r.sis;
+    html += `<div class="invc-row">
+      <div class="n">${esc(r.label)}${r.unidad ? ` <small>${esc(r.unidad)}</small>` : ''}</div>
+      <div class="sis">${r.f ? 'sistema: '+r.sis : '✍️ contar'}</div>
+      <input type="number" inputmode="numeric" min="0" value="${esc(r.val)}" class="${dif?'dif':''}" oninput="cambiaInv(${i}, this)">
+      <button class="alr ${r.alerta?'on':''}" onclick="togAlertaInv(${i})">‼️</button>
+    </div>`;
+  });
+  $('invcLista').innerHTML = html;
+  actualizarBtnInv();
+}
+function cambiaInv(i, inp){
+  const r = invcFilas[i]; if(!r) return;
+  r.val = inp.value.trim();
+  const n = parseInt(r.val,10);
+  // si nadie tocó el ‼️ a mano, se recalcula solo con el número contado
+  if(!r.tocado && r.f && !isNaN(n)){
+    r.alerta = n <= r.min;
+    inp.parentElement.querySelector('.alr').classList.toggle('on', r.alerta);
+  }
+  inp.classList.toggle('dif', !!(r.f && r.val!=='' && n!==r.sis));
+  actualizarBtnInv();
+}
+function togAlertaInv(i){
+  const r = invcFilas[i]; if(!r) return;
+  r.alerta = !r.alerta; r.tocado = true;
+  pintarCierreInv();
+}
+function difsInv(){ return invcFilas.filter(r=>r.f && r.val!=='' && parseInt(r.val,10)!==r.sis); }
+function actualizarBtnInv(){
+  const n = difsInv().length;
+  $('invcBtn').textContent = n ? `🔒 Corregir ${n} diferencia${n===1?'':'s'} y preparar mensaje` : '📲 Listo: preparar mensaje';
+}
+function cerrarCierreInv(){ $('invcBg').classList.remove('open'); }
+function terminarCierreInv(){
+  const falta = invcFilas.find(r=>{ const n = parseInt(r.val,10); return r.val==='' || isNaN(n) || n<0; });
+  if(falta){ toast('Falta contar: ' + falta.label); return; }
+  const difs = difsInv();
+  if(difs.length){ // corregir el stock del sistema pide código de supervisor
+    anularId = null; anularTipo = 'invc';
+    $('codeTitle').textContent = '🔒 Corregir inventario';
+    $('codeDesc').textContent = 'El conteo no cuadra con el sistema en: ' + difs.map(r=>r.label+' ('+r.sis+' → '+parseInt(r.val,10)+')').join(', ') +
+      '. Ingresa el código de supervisor para corregir el stock.';
+    $('codeBtn').textContent = 'Corregir y continuar';
+    $('codeIn').value = '';
+    $('codeBg').classList.add('open');
+    setTimeout(()=>$('codeIn').focus(), 100);
+    return;
+  }
+  aplicarCierreInv();
+}
+async function aplicarCierreInv(){
+  const cfg = CIERRES_INV[invcTipo]; if(!cfg) return;
+  const difs = difsInv().map(r=>({r, antes:r.sis, ahora:parseInt(r.val,10)}));
+  difs.forEach(d=>{ d.r.f.stock = d.ahora; });
+  S.invManual = S.invManual || {};
+  invcFilas.filter(r=>!r.f).forEach(r=>{ S.invManual[r.key] = parseInt(r.val,10); });
+  await save(); render();
+  const fecha = new Date().toLocaleDateString('es',{weekday:'short', day:'2-digit', month:'2-digit'});
+  const L = [`${cfg.encabezado} — ${fecha}`];
+  let sec = -1;
+  invcFilas.forEach(r=>{
+    if(r.sec!==sec){ sec = r.sec; L.push(''); const n = cfg.secciones[sec].nombre; if(n) L.push(n); }
+    const n = parseInt(r.val,10);
+    L.push(`${r.label} ${n}${r.unidad ? ' '+r.unidad : ''}${r.alerta ? (n===0 ? ' ‼️‼️‼️' : ' ‼️‼️') : ''}`);
+  });
+  if(difs.length){
+    L.push(''); L.push('⚠️ Corregido contra el sistema:');
+    difs.forEach(d=>L.push(`• ${d.r.label}: ${d.antes} → ${d.ahora}`));
+  }
+  const msg = L.join('\n');
+  cerrarCierreInv();
+  // destinatarios: los mismos de las alertas de stock, según sus categorías
+  const btns = (S.waDest||[]).filter(d=>d.cats==='all' || (Array.isArray(d.cats) && d.cats.some(c=>cfg.cats.includes(c))))
+    .map(d=>`<button class="big" style="margin-bottom:8px" data-wa="https://wa.me/${d.num}?text=${encodeURIComponent(msg)}">📲 ${esc(d.name ? d.name+' (+'+d.num+')' : '+'+d.num)}</button>`).join('');
+  $('waTitulo').textContent = cfg.titulo;
+  $('waResumen').textContent = msg;
+  $('waBotones').innerHTML = btns +
+    `<button class="big purple" style="margin-bottom:8px" data-wa="https://wa.me/?text=${encodeURIComponent(msg)}">📲 Elegir chat o grupo</button>`;
+  $('waBotones').querySelectorAll('[data-wa]').forEach(b=>{ b.onclick = () => { location.href = b.getAttribute('data-wa'); }; });
+  $('waBg').classList.add('open');
+  if(difs.length) toast('✅ Stock corregido (' + difs.length + ')');
 }
 
 /* ── ANULAR ── */
@@ -2152,6 +2344,7 @@ function cerrarCodigo(){ $('codeBg').classList.remove('open'); anularId = null; 
 async function confirmarCodigo(){
   const code = $('codeIn').value;
   if(code!==S.codes.sup && code!==S.codes.adm){ toast('❌ Código incorrecto'); $('codeIn').value=''; return; }
+  if(anularTipo==='invc'){ cerrarCodigo(); anularTipo = 'venta'; await aplicarCierreInv(); return; }
   const lista = anularTipo==='fiado' ? S.fiados : anularTipo==='gasto' ? S.gastos : S.sales;
   const idx = lista.findIndex(v=>v.id===anularId);
   cerrarCodigo();
